@@ -1,0 +1,9 @@
+Species,Phase,Count,Mean Time (min),Mean Relocations,Mean Relocation Interval (s),Relocation Interval Range (s),Mean Distance b/w Relocations (m)
+Sctaeniopterus,IP,11,18.97 ± 5.32,113.36 ± 31.79,10.06 ± 1.02,1 - 17,1.61 ± 0.47
+Sctaeniopterus,TP,35,20.09 ± 2.05,115.49 ± 23.03,10.87 ± 2.12,1 - 20,1.64 ± 0.3
+Scvetula,IP,11,20.38 ± 1.06,121.45 ± 24.87,10.48 ± 1.84,1 - 17,1.82 ± 0.3
+Scvetula,TP,17,22.47 ± 1.68,130.94 ± 14.79,10.45 ± 0.82,1 - 17,2.07 ± 0.34
+Spaurofrenatum,IP,10,20.5 ± 0.46,119.2 ± 18.75,10.65 ± 1.68,1 - 20,1.59 ± 0.17
+Spaurofrenatum,TP,20,19.81 ± 3.86,122.05 ± 29.36,10.04 ± 1.3,1 - 18,2.07 ± 0.46
+Spviride,IP,10,21.48 ± 2.92,118.7 ± 13.92,11.07 ± 1.79,1 - 19,1.68 ± 0.32
+Spviride,TP,14,21.15 ± 0.96,120.57 ± 23.2,10.98 ± 2.1,1 - 20,2.27 ± 0.29

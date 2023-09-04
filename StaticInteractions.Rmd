@@ -1,0 +1,3346 @@
+---
+title: "Static Interactions"
+author: "Joshua Manning"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Load packages
+Not all are used here.
+
+```{r}
+#Reading in, handling, cleaning data.
+
+library(plotKML) #function in this package for loading GPX files.
+library(tidyr) #data handling
+library(plyr)
+library(dplyr) #data wrangling
+library(tibble)
+library(lubridate)
+
+#Movement and spatial analyses
+
+library(sf)
+library(sp)
+library(raster)
+
+library(adehabitatLT)
+library(adehabitatHR) #analyses of home ranges and other movement code
+library(wildlifeDI) #for dynamic interaction analyses
+
+#Statistical analyses
+
+library(car) #Anova() function
+library(glmmTMB) #generalized linear mixed models
+library(DHARMa) #assumption checking
+library(performance) #assumption checking
+library(emmeans) #marginal means estimation
+library(multcomp) #post-hoc multiple comparisons
+
+#Plotting and mapping
+
+library(ggplot2) #visualization
+library(ggpubr) #for ggarrange() etc.
+library(gridExtra) #has a function for comparing ggplot plots side by side.
+library(RColorBrewer) #nice palettes
+library(extrafont) #for different fonts
+
+library(ggmap) #use this for plotting maps
+library(ggsn) #to add scale bars and north arrow
+library(ggspatial) #add scale bar and north arrow
+library(maps)
+library(mapdata)
+library(rworldmap)
+library(maptools)
+
+#Dealing with conflicts
+
+library(conflicted)
+```
+
+Resolve conflicts
+
+```{r}
+conflict_prefer("rename", "dplyr")
+conflict_prefer("group_by", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("mutate", "dplyr")
+conflict_prefer("count", "dplyr")
+conflict_prefer("contr.sum", "stats")
+conflict_prefer("id", "adehabitatLT")
+```
+
+Species color scheme for plots
+
+```{r}
+sci.color <- "#542788"
+sct.color <- "#FCBBA1"
+scv.color <- "#F768A1"
+spa.color <- "#980043"
+spv.color <- "#35978F"
+
+sp.color.all <- c(sci.color, sct.color, scv.color, spa.color, spv.color)
+mainsp.color <- c(sct.color, scv.color, spa.color, spv.color)
+```
+
+
+
+##Estimation of home ranges and core areas, analysis of agonistic interactions, and static interaction analyses between neighboring terminal phase parrotfishes.
+
+Read in raw movement data for all parrotfish tracked during May-July 2021.
+  
+```{r}
+move <- read.csv("Data/move2021.csv")
+```
+
+Read in and prep standard length data and harem sizes (number of initial phases > 10 cm in standard length seen within the focal's home range at the time of observation). For some Sp. viride we had repeat observations and measurements of standard length and harem size. So, we computed the mean of the standard length and harem size estimates, and rounded up to the nearest cm (standard length) and number (harem size). That first required preliminary observations of tracks to determine which tracks belonged to which individual. Territory numbers were assigned to each individual based on overlap of tracks. The assumption of identity based on overlap was justified by prior findings of stable territory ownership and space use for long periods of time (Manning and McCoy 2023 Ecology and Evolution).
+
+```{r}
+#First, read in standard length and harem size data, and then read in the territory names document.
+
+sl.har <- read.csv("Data/stlength-harem.csv")
+
+sl.har$Date <- parse_date_time(x = sl.har$Date, 
+                                    orders = c("m/d/y"), 
+                                    locale = "eng")
+
+tnames_full <- read.csv("Data/tnames.csv") %>%
+  mutate(gpx = "gpx") %>%
+  unite("End", c(EndTime, gpx), sep = ".", remove = T)
+
+tnames_full$Date <- parse_date_time(x = tnames_full$Date, 
+                                    orders = c("m/d/y"), 
+                                    locale = "eng")
+
+#Join and wrangle data a bit
+
+sl.har.full <- sl.har %>%
+  full_join(tnames_full) %>%
+  select(-SeasYr) %>%
+  mutate(Terr = ifelse(is.na(Territory), End, Territory)) %>%
+  select(-Territory) 
+
+#Compute mean and standard deviation of standard length and harem size for the fish that were tracked repeatedly.
+
+sl.har.reps <- sl.har.full %>%
+  group_by(Site, Species, Phase, Terr) %>%
+  summarise(mSL = mean(SL, na.rm = T),
+            sdSL = sd(SL, na.rm = T),
+            maxSL = max(SL),
+            minSL = min(SL),
+            mHarem = mean(Harem, na.rm = T), 
+            sdHarem = sd(Harem, na.rm = T),
+            maxHarem = max(Harem),
+            minHarem = min(Harem)) %>%
+  mutate(mSL.rd = round(mSL + 0.01),       #Rounded standard length and harem size up to the next cm (SL) and number (Harem)
+         mHarem.rd = round(mHarem + 0.01))
+
+#Calculate absolute differences in repeat measurements of standard length and harem size for each individual and summarize for an estimate of accuracy. 
+
+abs.diff <- sl.har.reps %>%
+  filter_at(vars(sdSL, sdHarem), any_vars(!is.na(.))) %>%
+  mutate(absD.SL = maxSL-minSL,
+         absD.H = maxHarem-minHarem)
+
+abs.diff.sum <- abs.diff %>%
+  group_by(Species) %>%
+  summarise(mD.SL = mean(absD.SL, na.rm = T),
+            sdD.SL = sd(absD.SL, na.rm = T),
+            mD.H = mean(absD.H, na.rm = T),
+            sdD.H = sd(absD.H, na.rm = T))
+#Mean difference between repeat measurements was 1.3 +/- 1.5 cm for standard length and 2.0 +/- 1.7 individ. for harem size. Harem size for some of the initial measurements was estimated by less experienced observers and should therefore be treated with caution. However, most values fall within mean harem sizes reported for Caribbean parrotfishes elsewhere (Mumby and Wabnitz 2002).
+
+
+#Now we will finalize the data to merge with movement data.
+
+sl.har.imp <- sl.har.reps %>%
+  select(Site:Terr, mSL.rd, mHarem.rd)
+
+sl.har.imp$mHarem.rd[is.nan(sl.har.imp$mHarem.rd)]<-NA
+
+#Here, we removed a few tracks that we had flagged as repeat tracks or tracks that were deemed incomplete, etc. Notes are presented for each removal.
+
+sl.har.fin <- sl.har.full %>%
+  full_join(sl.har.imp) %>%
+  select(-Terr) %>%
+  unite(ID, c(Site:End), sep = "_") %>%
+  filter(ID != "AQ_Scvetula_TP_2021-06-08_125458.gpx") %>% ##remove this accidental repeat track of Sc vetula
+  filter(ID != "IV_Sctaeniopterus_TP_2021-07-01_151944.gpx") %>% ##remove this accidental repeat track of Sc taeniopterus
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-13_150500.gpx") %>% ##remove this track, it was short (12:58, much less than 20)
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-14_132704.gpx") %>% ##remove this because I started tracking the wrong fish for >1 min
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-14_144014.gpx") ##remove this because I started tracking the wrong fish for >6mins
+
+sl.har.final <- sl.har.fin %>%
+  select(-SL, -Harem) %>%
+  rename(mSL = mSL.rd,
+         mHarem = mHarem.rd) %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "End"), sep = "_")
+
+
+id1.sl.har <- sl.har.final %>%
+  unite(id1, c("Site", "Species", "Phase", "Date", "End"), sep = "_") %>%
+  rename(SL1 = mSL,
+         HAR1 = mHarem)
+
+id2.sl.har <- sl.har.final %>%
+  unite(id2, c("Site", "Species", "Phase", "Date", "End"), sep = "_") %>%
+  rename(SL2 = mSL,
+         HAR2 = mHarem)
+```
+
+Because the time column has more than just the date and time (i.e., T and Z), we separate into multiple columns and then unite the two columns without those characters. This makes it easier later...
+
+Additionally, remove tracks that are not complete or were accidental repeated tracks, as above.
+
+```{r}
+moving <- move %>% 
+  separate(time, c("Date","Time"), sep = c("T")) %>% ##separate the column in two at the T
+  filter(ID != "AQ_Scvetula_TP_2021-06-08_125458.gpx") %>% ##remove this accidental repeat track of Sc vetula
+  filter(ID != "IV_Sctaeniopterus_TP_2021-07-01_151944.gpx") %>% ##remove this accidental repeat track of Sc taeniopterus
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-13_150500.gpx") %>% ##remove this track, it was short (12:58, much less than 20)
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-14_132704.gpx") %>% ##remove this because I started tracking the wrong fish for >1 min
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-14_144014.gpx") ##remove this because I started tracking the wrong fish for >6mins
+
+moving$Time <- substr(moving$Time,1,nchar(moving$Time)-1) ##remove last character (in this case the Z)
+moving <- unite(moving, "time", c(Date, Time), sep = " ", remove=T)
+```
+
+The next thing we want to do is create a trajectory object.
+First, we convert it to a SpatialPointsDataFrame. CRS can be set using CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") or CRS(SRS_string="EPSG:4326"). The latter is preferred.
+
+```{r}
+loc <- data.frame("x" = moving$lon, "y" = moving$lat)
+proj4string = CRS(SRS_string="EPSG:4326")
+proj4string
+
+moving.spdf <- SpatialPointsDataFrame(loc, moving, proj4string = proj4string)
+```
+
+Convert CRS to UTM Zone 19 EPSG: 32619 for projection in Bonaire. Units in meters.
+
+```{r}
+moving.spdf.met = spTransform(moving.spdf, CRS(SRS_string="EPSG:32619"))
+
+str(moving.spdf.met)
+```
+
+Next, we create an ltraj object. There are two types of trajectories. Type 1: Locations only, with no time recorded. 
+We have a Type 2 trajectory, with time recorded. The time needs to be of class POSIXct object in order to convert to ltraj. 
+First I need to check that time is in the correct format.
+
+Since the time is not in the correct format, we need to convert it.
+
+```{r}
+moving.spdf.met$time <- as.POSIXct(strptime(as.character(moving.spdf.met$time), "%Y-%m-%d %H:%M:%S"))
+
+class(moving.spdf.met$time)
+```
+
+Now we can create the ltraj object:
+The resulting object belongs to the classes ltraj and list. It is a list of data frames that should behave like any other list.
+
+```{r}
+raw_tracks <- as.ltraj(coordinates(moving.spdf.met), date = moving.spdf.met$time, id=moving.spdf.met$ID, typeII = T)
+
+class(raw_tracks)
+```
+
+How many unique tracks (not necessarily unique individuals)?
+
+```{r}
+length(raw_tracks)
+```
+170 unique tracks
+
+
+#Summarise the tracking information
+
+Calculate mean, min, and max time and distance between GPS relocations for all 170 tracks.
+
+```{r}
+traj_df <- ld(raw_tracks) #unlist
+str(traj_df)
+traj_df$id <- as.factor(traj_df$id)
+
+traj_summary <- traj_df %>%
+  select(-burst, -pkey) %>%
+  group_by(id) %>%
+  summarise(tmu = mean(dt, na.rm = T),
+            tmax = max(dt, na.rm = T),
+            tmin = min(dt, na.rm = T),
+            dmu = mean(dist, na.rm = T),
+            dmax = max(dist, na.rm = T),
+            dmin = min(dist, na.rm = T),
+            N = n(),
+            totaltime = sum(dt, na.rm = T)/60)
+
+
+traj_summary2 <- as.data.frame(traj_summary) %>%
+  separate(id, c("Site", "Species", "Phase", "Date", "End"), sep = "_")
+
+traj_summary2$Site <- as.factor(traj_summary2$Site)
+traj_summary2$Species <- as.factor(traj_summary2$Species)
+traj_summary2$Date  <- as.Date(traj_summary2$Date)
+```
+
+Summarise Tracking Data after filtering data to remove non-focal (Sc iseri and Sc guacamaia) species tracks, non-territorial floaters (analyzing separately), and preliminary tracks of Sp. viride prior to June. Our analyses focus on tracking data during June and July when most fish were tracked.
+
+```{r}
+sxp.traj.sum <- traj_summary2 %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & 
+           Phase %in% c("TP", "IP") & 
+           Date > "2021-05-31") %>%
+  group_by(Species, Phase) %>%
+  summarise(Count = n(),
+            mTT = mean(totaltime),
+            sdTT = sd(totaltime),
+            mRelocations = mean(N),
+            sdRelocations = sd(N),
+            mTBR = mean(tmu),
+            sdTBR = sd(tmu),
+            MinTBR = min(tmin),
+            MaxTBR = max(tmax),
+            mSD = mean(dmu),
+            sdSD = sd(dmu)) %>%
+  mutate(across(mTT:sdSD, round, 2)) %>% 
+  unite("Mean Relocations", mRelocations:sdRelocations, sep = " \u00B1 ") %>% 
+  unite("Mean Time (min)", mTT:sdTT, sep = " \u00B1 ") %>%
+  unite("Mean Relocation Interval (s)", mTBR:sdTBR, sep = " \u00B1 ") %>%
+  unite("Relocation Interval Range (s)", MinTBR:MaxTBR, sep = " - ") %>% 
+  unite("Mean Distance b/w Relocations (m)", mSD:sdSD, sep = " \u00B1 ")
+
+sxp.traj.sum
+
+write.table(sxp.traj.sum, file = "DataSummary/sxp.traj.sum.txt",
+            sep = ",", quote = FALSE, row.names = F)
+
+overall.traj.sum <- traj_summary2 %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & 
+           Phase %in% c("TP", "IP") & 
+           Date > "2021-05-31") %>%
+  summarise(Count = n(),
+            mTT = mean(totaltime),
+            sdTT = sd(totaltime),
+            mRelocations = mean(N),
+            sdRelocations = sd(N),
+            mTBR = mean(tmu),
+            sdTBR = sd(tmu),
+            MinTBR = min(tmin),
+            MaxTBR = max(tmax),
+            mSD = mean(dmu),
+            sdSD = sd(dmu)) %>%
+  mutate(across(mTT:sdSD, round, 2)) %>%
+  unite("Mean Relocations", mRelocations:sdRelocations, sep = " \u00B1 ") %>% 
+  unite("Mean Time (min)", mTT:sdTT, sep = " \u00B1 ") %>% 
+  unite("Mean Relocation Interval (s)", mTBR:sdTBR, sep = " \u00B1 ") %>%
+  unite("Relocation Interval Range (s)", MinTBR:MaxTBR, sep = " - ") %>% 
+  unite("Mean Distance b/w Relocations (m)", mSD:sdSD, sep = " \u00B1 ")
+
+overall.traj.sum
+
+write.table(overall.traj.sum, file = "DataSummary/overall.traj.sum.txt",
+            sep = ",", quote = FALSE, row.names = F)
+```
+
+
+#MKDE Home Range and Core Use Estimation
+
+To estimate overlaps among individuals, the same grid needs to be used for all individuals when estimating the UDs (same4all = T). However, doing that for all individuals at all sites requires too large a grid for R to be able to run this effectively and estimate home ranges. So, we subset for each site and increased the grid for those. We don't need overlaps for things that definitely do not overlap anyway.
+
+Subset 'moving' dataframe by Site. 
+```{r}
+aqm <- moving %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "End"), sep = "_", remove = F) %>%
+  filter(Site == "AQ")
+
+ivm <- moving %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "End"), sep = "_", remove = F) %>%
+  filter(Site == "IV")
+```
+
+Using the coordinates function, create an SPDF for each site.
+
+CRS can be set using CRS("+proj=longlat +ellps=WGS84 +datum=WGS84 +no_defs") or CRS(SRS_string="EPSG:4326"). The latter is preferred.
+
+```{r}
+proj4string = CRS(SRS_string="EPSG:4326")
+proj4string
+
+aqloc <- data.frame("x" = aqm$lon, "y" = aqm$lat)
+ivloc <- data.frame("x" = ivm$lon, "y" = ivm$lat)
+
+aqm.spdf <- SpatialPointsDataFrame(aqloc, aqm, proj4string = proj4string)
+ivm.spdf <- SpatialPointsDataFrame(ivloc, ivm, proj4string = proj4string)
+```
+
+For both sites, convert CRS to UTM Zone 19 EPSG: 32619 for projection in Bonaire. Units in meters.
+
+```{r}
+aqm.spdf.met = spTransform(aqm.spdf, CRS(SRS_string="EPSG:32619"))
+ivm.spdf.met = spTransform(ivm.spdf, CRS(SRS_string="EPSG:32619"))
+```
+
+Next, create an ltraj object.
+
+First, convert time to the correct format.
+
+```{r}
+aqm.spdf.met$time <- as.POSIXct(strptime(as.character(aqm.spdf.met$time), "%Y-%m-%d %H:%M:%S"))
+ivm.spdf.met$time <- as.POSIXct(strptime(as.character(ivm.spdf.met$time), "%Y-%m-%d %H:%M:%S"))
+
+str(aqm.spdf.met)
+```
+
+
+#Demonstrate stationarity of movement
+
+```{r eval = F}
+#AQ
+
+aqm.sf.met <- st_as_sf(aqm.spdf.met) %>%
+  mutate(Longitude = st_coordinates(.)[,1],
+         Latitude = st_coordinates(.)[,2])
+
+for(i in unique(aqm.sf.met$ID)){
+  glat <- ggplot(aes(x = time, y = Latitude), data = subset(aqm.sf.met, ID == i)) +
+    geom_line(color = "black") +
+    labs(y = "Northing", y = "") +
+    theme_classic()
+  glon <- ggplot(aes(x = time, y = Longitude), data = subset(aqm.sf.met, ID == i)) +
+    geom_line(color = "black") +
+    labs(y = "Easting", x = "Time (UTC)") +
+    theme_classic()
+  gi <- ggarrange(glat, glon,
+                     ncol = 1, nrow = 2, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+  
+  ggsave(filename = sprintf('Figures/Stationarity/AQ/%s.png', i), plot = gi)
+}
+
+
+#IV
+
+ivm.sf.met <- st_as_sf(ivm.spdf.met) %>%
+  mutate(Longitude = st_coordinates(.)[,1],
+         Latitude = st_coordinates(.)[,2])
+
+for(i in unique(ivm.sf.met$ID)){
+  glat <- ggplot(aes(x = time, y = Latitude), data = subset(ivm.sf.met, ID == i)) +
+    geom_line(color = "black") +
+    labs(y = "Northing", y = "") +
+    theme_classic()
+  glon <- ggplot(aes(x = time, y = Longitude), data = subset(ivm.sf.met, ID == i)) +
+    geom_line(color = "black") +
+    labs(y = "Easting", x = "Time (UTC)") +
+    theme_classic()
+  gi <- ggarrange(glat, glon,
+                     ncol = 1, nrow = 2, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+  
+  ggsave(filename = sprintf('Figures/Stationarity/IV/%s.png', i), plot = gi)
+}
+```
+
+#Now create the ltraj object.
+The resulting object belongs to the classes ltraj and list. It is a list of dataframes that should behave like any other list in R.
+
+```{r}
+aq_rt <- as.ltraj(coordinates(aqm.spdf.met), date = aqm.spdf.met$time, id=aqm.spdf.met$ID, typeII = T)
+iv_rt <- as.ltraj(coordinates(ivm.spdf.met), date = ivm.spdf.met$time, id=ivm.spdf.met$ID, typeII = T)
+```
+
+
+#Compute utilization distributions
+
+We can now specify the parameters for the MKDE Brownian Bridge model. We calculate vv for each track/site, setting Lmin to 0 m and Tmax to 60 s. We then specify hmin as 1.
+
+```{r}
+aqvv <- BRB.D(aq_rt, Tmax = 60, Lmin = 0)
+ivvv <- BRB.D(iv_rt, Tmax = 60, Lmin = 0)
+
+median(do.call(rbind.data.frame, aqvv)$D) #0.070
+median(do.call(rbind.data.frame, ivvv)$D) #0.068
+
+hmin <- 1 
+```
+
+Estimate UDs using the diffusion parameters calculated above, Tmax = 60 s, Lmin = 0 m, and hmin = 1.
+
+```{r}
+aqud <- BRB(aq_rt, D = aqvv, Tmax = 60, Lmin = 0, hmin=hmin, filtershort = F, grid = 300, same4all = T)
+ivud <- BRB(iv_rt, D = ivvv, Tmax = 60, Lmin = 0, hmin=hmin, filtershort = F, grid = 300, same4all = T)
+
+conflict_prefer("id", "adehabitatLT")
+names(aqud) <- id(aq_rt)
+names(ivud) <- id(iv_rt)
+```
+
+
+#Quantify the area of the home ranges (95% cumulative isopleth) and core areas (50% cumulative isopleth)
+
+```{r}
+aq.95 <- kernel.area(aqud, percent = 95, unin = "m", unout = "m2")
+aq.50 <- kernel.area(aqud, percent = 50, unin = "m", unout = "m2")
+
+iv.95 <- kernel.area(ivud, percent = 95, unin = "m", unout = "m2")
+iv.50 <- kernel.area(ivud, percent = 50, unin = "m", unout = "m2")
+```
+
+Merge area data frames
+
+```{r}
+area.mkde.95 <- cbind(aq.95, iv.95)
+area.mkde.50 <- cbind(aq.50, iv.50)
+
+area.mkde.95l <- pivot_longer(area.mkde.95, cols = c(1:ncol(area.mkde.95)), names_to = "id", values_to = "area.mkde.95")
+area.mkde.50l <- pivot_longer(area.mkde.50, cols = c(1:ncol(area.mkde.50)), names_to = "id", values_to = "area.mkde.50")
+
+
+area.mkde <- merge(area.mkde.95l, area.mkde.50l, by = "id") %>%
+  separate(id, c("Site", "Species", "Phase", "Date", "End"), sep = "_") %>% ## This will only work with a df object
+  rename(MKDE95 = area.mkde.95,
+         MKDE50 = area.mkde.50)
+
+area.mkde$Site <- as.factor(area.mkde$Site)
+area.mkde$Species <- gsub("\\.", " ", area.mkde$Species)
+area.mkde$Species <- as.factor(area.mkde$Species)
+
+#Remove '.' from Date and Species columns and replace with '-' and ' '  respectively.
+area.mkde$Date <- gsub("\\.", "-", area.mkde$Date)
+
+#Merge data frame with the standard length and harem data frame. Quantify biomass of each fish using length-weight relationships (source following each).
+
+area.mkde <- area.mkde %>%
+  full_join(sl.har.final) %>%
+  mutate(mass = ifelse(Species == "Spviride", 0.025*(mSL^2.921), #Bohnsack and Harper
+                       ifelse(Species == "Scvetula", 0.01445*(mSL^3.03), #Froese ET2014 J. Appl. Ichthyol. (FishBase Bayesian Est.)
+                              ifelse(Species == "Spaurofrenatum", 0.00468*(mSL^3.429), #Bohnsack and Harper
+                                     ifelse(Species == "Sctaeniopterus", 0.0135*(mSL^3.0), #Bohnsack and Harper
+                                            0.01096*(mSL^3.01)))))) %>% #Froese ET2014 (FishBase Bayesian Est.) Sc. iseri
+  rename(SL = mSL,
+         Harem = mHarem)
+
+
+#Save as .csv file
+
+write.csv(area.mkde, "ProcessedData/Full_HRs.csv", row.names = F)
+```
+
+
+#HR and CU summaries for only the 4 species of interest, TPs and IPs (no transients, dealt with elsewhere), for June and July.
+
+```{r}
+sxp.hr.sum <- area.mkde %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & 
+           Phase %in% c("TP", "IP") & 
+           Date > "2021-05-31") %>%
+  group_by(Species, Phase) %>%
+  summarise(Count = n(),
+            m95 = mean(MKDE95),
+            se95 = sd(MKDE95)/sqrt(Count),
+            m50 = mean(MKDE50),
+            se50 = sd(MKDE50)/sqrt(Count),
+            mSL = mean(SL),
+            seSL = sd(SL)/sqrt(Count),
+            mMass = mean(mass),
+            seMass = sd(mass)/sqrt(Count)) %>%
+  mutate(across(m95:se50, round, 2)) %>% 
+  mutate(across(mSL:seMass, round, 1)) %>% 
+  unite("Home Range Area", m95:se95, sep = " \u00B1 ") %>% 
+  unite("Core Area", m50:se50, sep = " \u00B1 ") %>% 
+  unite("Standard Length", mSL:seSL, sep = " \u00B1 ") %>% 
+  unite("Biomass", mMass:seMass, sep = " \u00B1 ")
+
+sum(sxp.hr.sum$Count) #should be 128
+
+write.table(sxp.hr.sum, file = "DataSummary/sxp.hr.sum.txt",
+            sep = ",", quote = FALSE, row.names = F)
+```
+
+
+#Analyses of home range and core use area
+
+Home Range
+
+```{r}
+#first filter full data set to include only focal species, exclude transients, and exclude tracks of Sp. viride prior to June. 
+area.mkde2 <- area.mkde %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & 
+           Phase %in% c("TP", "IP") & 
+           Date > "2021-05-31") %>%
+  mutate(logmass = log10(mass))
+
+hr.m0.new <- glmmTMB(data = area.mkde2, MKDE95 ~ Site + Species*Phase + logmass, family = Gamma(link = "log"))
+
+test.fithr <- simulateResiduals(fittedModel = hr.m0.new, n = 250)
+testZeroInflation(test.fithr)
+plot(test.fithr)
+outliers(test.fithr)
+
+summary(hr.m0.new)
+options(contrasts = c("contr.sum", "contr.poly"))
+Anova(hr.m0.new, type = 3)
+```
+Family: Gamma  ( log )
+Formula:          MKDE95 ~ Site + Species * Phase + logmass
+Data: area.mkde2
+
+     AIC      BIC   logLik deviance df.resid 
+  1385.0   1416.4   -681.5   1363.0      117 
+
+
+Dispersion estimate for Gamma family (sigma^2): 0.0812 
+
+Conditional model:
+                Estimate Std. Error z value Pr(>|z|)    
+(Intercept)      4.20593    0.71165   5.910 3.42e-09 ***
+Site1           -0.03685    0.02539  -1.451 0.146673    
+Species1        -0.35821    0.09134  -3.922 8.78e-05 ***
+Species2         0.06700    0.10913   0.614 0.539219    
+Species3         0.10899    0.14496   0.752 0.452149    
+Phase1          -0.07881    0.06542  -1.205 0.228346    
+logmass          0.47816    0.33022   1.448 0.147624    
+Species1:Phase1  0.16610    0.04684   3.546 0.000391 ***
+Species2:Phase1 -0.04344    0.05175  -0.839 0.401257    
+Species3:Phase1 -0.09007    0.04951  -1.819 0.068870 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+Response: MKDE95
+                Chisq Df Pr(>Chisq)    
+(Intercept)   34.9298  1  3.418e-09 ***
+Site           2.1065  1    0.14667    
+Species       53.3339  3  1.556e-11 ***
+Phase          1.4511  1    0.22835    
+logmass        2.0966  1    0.14762    
+Species:Phase 14.0113  3    0.00289 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Core Area
+
+```{r}
+cu.m0.new <- glmmTMB(data = area.mkde2, MKDE50 ~ Site + Species*Phase + logmass, family = Gamma(link = "log"))
+
+test.fitcu <- simulateResiduals(fittedModel = cu.m0.new, n = 250)
+testZeroInflation(test.fitcu)
+plot(test.fitcu)
+outliers(test.fitcu)
+
+summary(cu.m0.new)
+options(contrasts = c("contr.sum", "contr.poly"))
+Anova(cu.m0.new, type = 3)
+```
+
+Family: Gamma  ( log )
+Formula:          MKDE50 ~ Site + Species * Phase + logmass
+Data: area.mkde2
+
+     AIC      BIC   logLik deviance df.resid 
+  1111.1   1142.5   -544.6   1089.1      117 
+
+
+Dispersion estimate for Gamma family (sigma^2): 0.151 
+
+Conditional model:
+                Estimate Std. Error z value Pr(>|z|)    
+(Intercept)      2.91952    0.95348   3.062 0.002199 ** 
+Site1           -0.04117    0.03467  -1.188 0.234951    
+Species1        -0.41288    0.12394  -3.331 0.000864 ***
+Species2         0.12360    0.14742   0.838 0.401807    
+Species3         0.14565    0.19426   0.750 0.453393    
+Phase1          -0.10550    0.08799  -1.199 0.230539    
+logmass          0.44174    0.44241   0.998 0.318040    
+Species1:Phase1  0.12819    0.06355   2.017 0.043673 *  
+Species2:Phase1 -0.05201    0.06989  -0.744 0.456744    
+Species3:Phase1 -0.12042    0.06720  -1.792 0.073149 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+Response: MKDE50
+                Chisq Df Pr(>Chisq)    
+(Intercept)    9.3757  1   0.002199 ** 
+Site           1.4106  1   0.234951    
+Species       38.7819  3   1.93e-08 ***
+Phase          1.4375  1   0.230539    
+logmass        0.9970  1   0.318040    
+Species:Phase  6.8633  3   0.076384 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+#Plot results of home range and core area analyses
+
+```{r}
+sxp.hr.sum.p <- area.mkde %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP", "IP") & Date > "2021-05-31") %>%
+  mutate(Prop = MKDE50/MKDE95) %>%
+  group_by(Species, Phase) %>%
+  summarise(Count = n(),
+            m95 = mean(MKDE95),
+            se95 = sd(MKDE95)/sqrt(Count),
+            m50 = mean(MKDE50),
+            se50 = sd(MKDE50)/sqrt(Count),
+            mProp = mean(Prop),
+            seProp = sd(Prop)/sqrt(Count))
+sxp.hr.sum.p
+
+hr.sxp.p <- ggplot(sxp.hr.sum.p, aes(x=Species, y=m95, fill=Species)) + 
+  geom_col(aes(alpha = Phase), position = position_dodge2(width = 0.9, preserve = "single"), 
+           linewidth = 0.5, color = "black") +
+  geom_errorbar(aes(ymin = m95 - se95, ymax = m95 + se95, group=Phase),
+                width = 0, position = position_dodge(0.9), linewidth = 0.5) +
+  theme_classic(base_family = "Arial") +
+  labs(x = expression(paste("Species")), y = expression(paste("Home Range Area (m " ^2,")"))) +
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.y = element_text(size=12, color = "black"),
+        axis.text.y = element_text(size=10, color = "black"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c(sct.color, scv.color, spa.color, spv.color)) +
+  scale_alpha_discrete(range = c(0.5, 1)) +
+  ylim(0,360) +
+  scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
+hr.sxp.p
+
+cu.sxp.p <- ggplot(sxp.hr.sum.p, aes(x=Species, y=m50, fill=Species)) + 
+  geom_col(aes(alpha = Phase), position = position_dodge2(width = 0.9, preserve = "single"), 
+           linewidth = 0.5, color = "black") +
+  geom_errorbar(aes(ymin = m50 - se50, ymax = m50 + se50, group=Phase), 
+                width = 0, position = position_dodge(0.9), linewidth = 0.5)+
+  theme_classic(base_family = "Arial") +
+  labs(x = expression(paste("Species")), y = expression(paste("Core Area (m " ^2,")"))) +
+  theme(legend.position = "none",
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(size=10, color = "black", face = "italic", angle = 90, hjust = 1, vjust = 0.25),
+        axis.title.y = element_text(size=12, color = "black"),
+        axis.text.y = element_text(size=10, color = "black"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c(sct.color, scv.color, spa.color, spv.color)) +
+  scale_alpha_discrete(range = c(0.5, 1)) +
+  ylim(0,100) +
+  scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
+cu.sxp.p
+
+hr.cu.p <- ggarrange(hr.sxp.p, cu.sxp.p,
+                     labels = c("a  ", "b  "),
+                     ncol = 1, nrow = 2, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+hr.cu.p
+
+ggsave("Figures/Fig1.png", plot = hr.cu.p,
+       width = 4, height = 5.5, dpi = 300)
+```
+
+
+
+
+##Create home range and core area shapefiles
+
+First I use getvertices in the adehabitatHR package to get the countours for the home ranges I computed.
+
+```{r eval = F}
+aq.ud95 <- getverticeshr(aqud, percent = 95, unin = "m", unout = "m2")
+iv.ud95 <- getverticeshr(ivud, percent = 95, unin = "m", unout = "m2")
+
+aq.ud50 <- getverticeshr(aqud, percent = 50, unin = "m", unout = "m2")
+iv.ud50 <- getverticeshr(ivud, percent = 50, unin = "m", unout = "m2")
+```
+
+Now I generate the shapefiles
+
+```{r eval = F}
+#AQ
+proj4string(aq.ud95) <- CRS(SRS_string="EPSG:32619") #add the UTM projection CRS to match the data
+proj4string(aq.ud50) <- CRS(SRS_string="EPSG:32619")
+
+#Convert to sf object using st_as_sf in the sf package
+aq.mkde95 <- st_as_sf(aq.ud95) %>%
+  separate(id, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_") %>%
+  separate(EndTime, c("EndTime", "File"), sep = "[.]") %>%
+  select(-File) %>%
+  rownames_to_column(var = "ID") %>%
+  st_set_crs(32619)
+
+aq.mkde50 <- st_as_sf(aq.ud50) %>%
+  separate(id, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_") %>%
+  separate(EndTime, c("EndTime", "File"), sep = "[.]") %>%
+  select(-File) %>%
+  rownames_to_column(var = "ID") %>%
+  st_set_crs(32619)
+
+st_write(aq.mkde95, "ProcessedData/aq2021.mkde95.shp", append = F)
+st_write(aq.mkde50, "ProcessedData/aq2021.mkde50.shp", append = F)
+
+#IV
+proj4string(iv.ud95) <- CRS(SRS_string="EPSG:32619") #add the UTM projection CRS to match the data
+proj4string(iv.ud50) <- CRS(SRS_string="EPSG:32619")
+
+#Convert to sf object using st_as_sf in the sf package
+iv.mkde95 <- st_as_sf(iv.ud95) %>%
+  separate(id, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_") %>%
+  separate(EndTime, c("EndTime", "File"), sep = "[.]") %>%
+  select(-File) %>%
+  rownames_to_column(var = "ID") %>%
+  st_set_crs(32619)
+
+iv.mkde50 <- st_as_sf(iv.ud50) %>%
+  separate(id, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_") %>%
+  separate(EndTime, c("EndTime", "File"), sep = "[.]") %>%
+  select(-File) %>%
+  rownames_to_column(var = "ID") %>%
+  st_set_crs(32619)
+
+st_write(iv.mkde95, "ProcessedData/iv2021.mkde95.shp", append = F)
+st_write(iv.mkde50, "ProcessedData/iv2021.mkde50.shp", append = F)
+```
+
+Read in Shapefiles for MKDE 95% Home Ranges and 50% Core Areas
+
+```{r}
+AQ95shp <- st_read("ProcessedData/aq2021.mkde95.shp") 
+
+AQ95shp2 <- st_read("ProcessedData/aq2021.mkde50.shp")
+
+IV95shp <- st_read("ProcessedData/iv2021.mkde95.shp")
+
+IV95shp2 <- st_read("ProcessedData/iv2021.mkde50.shp")
+
+AQcent <- st_centroid(AQ95shp)
+IVcent <- st_centroid(IV95shp)
+```
+
+
+#Map the home range and core areas for terminal (ALL CAPITALIZED) and initial phase (all lowercase) parrotfishes
+
+AQ
+
+```{r}
+AQ_SPA_HR <- ggplot() +
+  geom_sf(data = AQ95shp %>% filter(Species == "Spaurofrenatum" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Spaurofrenatum" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577625,577725), breaks = c(577630, 577675, 577720)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337580), breaks = c(1337420, 1337460, 1337500, 1337540, 1337580)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+AQ_SPA_HR
+
+AQ_SPV_HR <- ggplot() +
+  geom_sf(data = AQ95shp %>% filter(Species == "Spviride" & Phase == "TP" & Date > "2021-06-01"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Spviride" & Phase == "TP" & Date > "2021-06-01"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577625,577725), breaks = c(577630, 577675, 577720)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337580), breaks = c(1337420, 1337460, 1337500, 1337540, 1337580)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+AQ_SPV_HR
+
+AQ_SCV_HR <- ggplot() +
+  geom_sf(data = AQ95shp %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577625,577725), breaks = c(577630, 577675, 577720)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337580), breaks = c(1337420, 1337460, 1337500, 1337540, 1337580)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = brewer.pal(12, "Paired"))
+AQ_SCV_HR
+
+
+aq_scv_hr <- ggplot() +
+  geom_sf(data = AQ95shp %>% filter(Species == "Scvetula" & Phase == "IP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, fill = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(color = EndTime), linewidth = 0.5, alpha = 0.5, fill = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577625,577725), breaks = c(577630, 577675, 577720)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337580), breaks = c(1337420, 1337460, 1337500, 1337540, 1337580)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = brewer.pal(12, "Paired"))
+AQ_SCV_HR
+
+
+library(RColorBrewer)
+brewer.pal(12, "Paired")
+match_palette <- c("#A6CEE3", "#1F78B4", "#FDBF6F", "#FF7F00", "#33A02C")
+
+AQ_SCV_scv_HR <- ggplot() +
+  geom_sf(data = AQ95shp %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(color = EndTime), linewidth = 0.5, alpha = 0.2, fill = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(color = EndTime), linewidth = 0.5, alpha = 0.5, fill = "black") +
+  geom_sf(data = AQ95shp %>% filter(Species == "Scvetula" & Phase == "IP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.3, color = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Scvetula" & Phase == "IP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.6, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577640,577710), breaks = c(577650, 577675, 577700)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337560), breaks = c(1337420, 1337455, 1337490, 1337525, 1337560)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_color_manual(values = brewer.pal(12, "Paired")) +
+  scale_fill_manual(values = match_palette)
+AQ_SCV_scv_HR
+
+ggsave("Figures/FigureS9.png", plot = AQ_SCV_scv_HR,
+       width = 6, height = 6, dpi = 300)
+
+
+AQ_SCT_HR <- ggplot() +
+  geom_sf(data = AQ95shp %>% filter(Species == "Sctaeniopterus" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = AQ95shp2 %>% filter(Species == "Sctaeniopterus" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577625,577725), breaks = c(577630, 577675, 577720)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337580), breaks = c(1337420, 1337460, 1337500, 1337540, 1337580)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+AQ_SCT_HR
+
+
+AQ_HRs <- ggarrange(AQ_SPV_HR, AQ_SPA_HR, AQ_SCV_HR, AQ_SCT_HR,
+                    ncol = 2, nrow = 2, labels = c("a", "b", "c", "d"),
+                    font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+AQ_HRs
+
+ggsave("Figures/TP_maps_AQ.png", plot = AQ_HRs,
+       width = 6.5, height = 7.5, dpi = 300)
+```
+
+IV
+
+```{r}
+IV_SPA_HR <- ggplot() +
+  geom_sf(data = IV95shp %>% filter(Species == "Spaurofrenatum" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = IV95shp2 %>% filter(Species == "Spaurofrenatum" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(578120, 578210), breaks = c(578130, 578165, 578200)) +
+  scale_y_continuous("Northing (m)", limits = c(1335235, 1335350), breaks = c(1335240, 1335265, 1335290, 1335315, 1335340)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+IV_SPA_HR
+
+IV_SPV_HR <- ggplot() +
+  geom_sf(data = IV95shp %>% filter(Species == "Spviride" & Phase == "TP" & Date > "2021-05-31"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = IV95shp2 %>% filter(Species == "Spviride" & Phase == "TP" & Date > "2021-05-31"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(578120, 578210), breaks = c(578130, 578165, 578200)) +
+  scale_y_continuous("Northing (m)", limits = c(1335235, 1335350), breaks = c(1335240, 1335265, 1335290, 1335315, 1335340)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+IV_SPV_HR
+
+IV_SCT_HR <- ggplot() +
+  geom_sf(data = IV95shp %>% filter(Species == "Sctaeniopterus" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = IV95shp2 %>% filter(Species == "Sctaeniopterus" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(578120, 578210), breaks = c(578130, 578165, 578200)) +
+  scale_y_continuous("Northing (m)", limits = c(1335235, 1335350), breaks = c(1335240, 1335265, 1335290, 1335315, 1335340)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+IV_SCT_HR
+
+IV_SCV_HR <- ggplot() +
+  geom_sf(data = IV95shp %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.2, color = "black") +
+  geom_sf(data = IV95shp2 %>% filter(Species == "Scvetula" & Phase == "TP"), 
+          aes(fill = EndTime), linewidth = 0.5, alpha = 0.5, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(578120, 578210), breaks = c(578130, 578165, 578200)) +
+  scale_y_continuous("Northing (m)", limits = c(1335235, 1335350), breaks = c(1335240, 1335265, 1335290, 1335315, 1335340)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2),
+        legend.position = "none") +
+  scale_fill_manual(values = get_palette(k = 20))
+IV_SCV_HR
+
+IV_HRs <- ggarrange(IV_SPV_HR, IV_SPA_HR, IV_SCV_HR, IV_SCT_HR,
+                    ncol = 2, nrow = 2, labels = c("a", "b", "c", "d"),
+                    font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+IV_HRs
+
+ggsave("Figures/TP_maps_IV.png", plot = IV_HRs,
+       width = 6.5, height = 7.5, dpi = 300)
+```
+
+
+
+
+##Analysis of agonistic interactions and their distributions within parrotfish territories
+
+First, a look at the spatial distribution of interactions within parrotfish territories. 
+
+Read in behavioral observation annotations.
+
+```{r}
+bhav <- read.csv("Data/behave2021.csv")
+```
+
+Calculate the Total Observation Time
+
+```{r}
+follow.start <- bhav %>%
+  filter(Behavior == "START/STOP") %>%
+  filter(Status == "START") %>%
+  rename(Start = "Time") %>%
+  select(ID, Start)
+n_distinct(follow.start) #86
+
+follow.stop <- bhav %>%
+  filter(Behavior == "START/STOP") %>%
+  filter(Status == "STOP") %>%
+  rename(Stop = "Time") %>%
+  select(ID, Stop)
+n_distinct(follow.stop) #86
+
+follow.time <- left_join(follow.stop, follow.start)
+follow.time$Follow.Time <- (follow.time$Stop - follow.time$Start)/60
+```
+
+Format behavioral data - create time stamps for each behavior
+
+```{r}
+#Start by creating a new data frame with the start times (time on watch in video) for each video observation
+starts <- bhav %>%
+  filter(Behavior == "Watch Time") %>%
+  select(ID, Time, Modifier.1) %>%
+  rename(WatchTime = Time, 
+         Watch = Modifier.1)
+
+starts$Watch <- as.POSIXct(starts$Watch, format="%H%M%S")
+starts$Watch <- format(starts$Watch, "%H:%M:%S")
+
+library(chron)
+
+beh.fin <- plyr::join(bhav, starts, by = "ID") %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_", remove = F) %>%
+  select(-Media.file.path, -Total.length, -FPS, -Subject, -Behavioral.category, -Comment)
+
+beh.fin$Time <- times(beh.fin$Time / (24 * 60 * 60))
+beh.fin$WatchTime <- times(beh.fin$WatchTime / (24 * 60 * 60))
+
+beh.fin$ActualTime <- beh.fin$Watch + (beh.fin$Time - beh.fin$WatchTime)
+```
+
+Next, combine the date and actual time columns and make it POSIXct
+
+```{r}
+beh.fin$Date <- as.Date(beh.fin$Date)
+
+beh.fin <- beh.fin %>% unite("time", c("Date", "ActualTime"), sep = " ", remove = F)
+
+beh.fin$time <- as.POSIXct(strptime(as.character(beh.fin$time), "%Y-%m-%d %H:%M:%S"))
+
+#Convert the actual times to UTC by adding 4 hours (EST is UTC-4 in spring/summer)
+beh.fin$time <- beh.fin$time + lubridate::hours(4)
+
+behavior <- beh.fin %>%
+  select(-Site, -Species, -Phase, -Date, -EndTime, -Watch, -WatchTime)
+```
+
+Subset for parrotfish interactions and remove unnecessary columns
+
+```{r}
+pis <- behavior %>%
+  filter(Behavior == "Parrotfish") %>%
+  rename(M1 = "Modifier.1",
+         M2 = "Modifier.2",
+         M3 = "Modifier.3",
+         M4 = "Modifier.4",
+         M5 = "Modifier.5")
+```
+
+Calculate the length of each interaction and have one line per observation with just the start time
+
+```{r}
+pint <- pis[with(pis, order(ID, time, Time, Behavior, M1, M2, M3, M4, M5)), ]
+
+int.start <- pint %>%
+  filter(Status == "START") %>%
+  rename(Int_Start = "Time") %>%
+  mutate(Number = row_number()) %>%
+  select(Number, Int_Start, time) #makes joining easier in a few steps
+n_distinct(int.start) #507
+
+int.stop <- pint %>%
+  filter(Status == "STOP") %>%
+  rename(Int_Stop = "Time") %>%
+  mutate(Number = row_number()) %>%
+  select(-c(time, Status)) #makes joining easier
+n_distinct(int.stop) #507
+
+pis.final <- left_join(int.stop, int.start)
+
+conflict_prefer("seconds", "lubridate")
+
+pi.fin <- pis.final %>%
+  filter(ID != "AQ_Scvetula_TP_2021-06-08_125458") %>% ##remove accidental repeat track of Sc vetula at AQ
+  filter(ID != "IV_Sctaeniopterus_TP_2021-07-01_151944") %>% ##remove accidental repeat track of Sc taeniopterus at IV
+  mutate(Duration = as.numeric(seconds(hms(Int_Stop-Int_Start)))) %>%
+  select(-c(Number))
+         
+pi.fin$Duration[pi.fin$Duration == 0] <- 1  ##One interaction was really short, and registered as a Duration of 0, so we added 1 second.
+```
+
+Prepare movement data for merging with behavioral data, including removing incomplete tracks and accidental repeats of certain fish, etc.
+
+```{r}
+library(stringr)
+
+gps <- move %>% 
+  filter(ID != "AQ_Scvetula_TP_2021-06-08_125458.gpx") %>% ##remove accidental repeat track of Sc vetula at AQ
+  filter(ID != "IV_Sctaeniopterus_TP_2021-07-01_151944.gpx") %>% ##remove accidental repeat track of Sc taeniopterus at IV
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-13_150500.gpx") %>% ##remove this track because it was short (12:58min)
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-14_132704.gpx") %>% ##remove b/c I started tracking the wrong fish for a bit (>1min)
+  filter(ID != "AQ_Sctaeniopterus_TP_2021-06-14_144014.gpx") %>% ##remove b/c I started tracking the wrong fish (>6mins)
+  separate(ID, c("Site", "Species", "Phase", "Date", "End"), sep = "_")
+gps$End <- str_sub(gps$End,1,nchar(gps$End)-4)
+
+move2 <- gps %>%
+  unite("ID", Site:End, sep = "_")
+
+##separate the column in two at the T
+moving2 <- move2 %>% separate(time, c("Date","Time"), sep = c("T"))
+moving2$Time = substr(moving2$Time,1,nchar(moving2$Time)-1) ##remove last character (in this case the Z)
+
+moving2 <- unite(moving2, "time", c(Date, Time), sep = " ", remove=T)
+
+moving2$time <- as.POSIXct(strptime(as.character(moving2$time), "%Y-%m-%d %H:%M:%S"))
+```
+
+Merge movement and behavior data
+
+```{r}
+move.pi <- plyr::rbind.fill(moving2, pi.fin)
+
+move.pi2 <- move.pi[with(move.pi, order(ID, time)),] %>%
+  select(-ele)
+
+
+move.pi.list <- split(move.pi2[,c(2:14)], move.pi2$ID)
+
+library(zoo)
+move.pi.list2 <- lapply(move.pi.list, function(x) transform(x,
+                                                              lat = na.approx(lat, time, na.rm=F),
+                                                              lon = na.approx(lon, time, na.rm=F)))
+
+m.behavior <- ldply(move.pi.list2, rbind)
+m.behavior <- m.behavior %>%
+  rename(ID = .id)
+
+bhav.locations <- m.behavior %>% drop_na("Behavior") %>%
+  mutate(Relationship = ifelse(M5 == "", "None", M5)) %>%
+  mutate(Intensity = ifelse(M4 == "None", "Unknown", ifelse(grepl("Chase", M4), "High", "Low"))) %>%
+  unite(Int.ID, c("M3", "M1"), sep = "-") %>%
+  rename(Int.Sp = M2)
+
+##One interaction was really short (duration = 0), so we added 1s to it above. There are no zeroes now.
+  
+write.csv(bhav.locations, "ProcessedData/bhav.locations.csv", row.names = F)
+```
+
+
+#Map interactions for all terminal phase parrotfishes. For initial inspection only.
+
+AQ
+
+```{r}
+library(smoothr)
+
+aq.all.HR <- AQ95shp %>%
+  filter(Phase == "TP" & Date > "2021-05-31") %>%
+  st_transform(aq.spv.HR, crs = 32619)
+
+#Create geometry with no holes for each. We assume that small holes in the center of the home ranges were likely artefacts. Will use this to compute the distance that interactions occurred from home range boundaries below.
+aq.all.HR.sm <- fill_holes(aq.all.HR, threshold = min(aq.all.HR$area)/2)
+
+aq.all.CU <- AQ95shp2 %>%
+  filter(Phase == "TP" & Date > "2021-05-31") %>%
+  st_transform(crs = 32619)
+
+aq.all.pis <- bhav.locations %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_") %>%
+  filter(Site == "AQ" & Phase == "TP" & Date > "2021-05-31" & Int.ID != "None-None") %>%
+  drop_na(c("lon","lat")) %>%
+  st_as_sf(coords = c("lon", "lat")) %>%
+  st_set_crs(4326) %>%
+  st_transform(aq.all.pis, crs = 32619)
+
+aq.all.ctr <- AQcent %>%
+  filter(Phase == "TP" & Date > "2021-05-31") %>%
+  st_transform(crs = 32619)
+```
+
+Maps
+
+```{r}
+aq.spv.pis.p <- ggplot() +
+  geom_sf(data = aq.all.HR %>% filter(Species == "Spviride"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = aq.all.CU %>% filter(Species == "Spviride"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = aq.all.pis %>% filter(Species == "Spviride"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = aq.all.ctr %>% filter(Species == "Spviride"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Aquarius", subtitle = expression(paste("TP", italic(" Sp. viride"))))
+aq.spv.pis.p
+
+aq.spa.pis.p <- ggplot() +
+  geom_sf(data = aq.all.HR %>% filter(Species == "Spaurofrenatum"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = aq.all.CU %>% filter(Species == "Spaurofrenatum"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = aq.all.pis %>% filter(Species == "Spaurofrenatum"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = aq.all.ctr %>% filter(Species == "Spaurofrenatum"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Aquarius", subtitle = expression(paste("TP", italic(" Sp. aurofrenatum"))))
+aq.spa.pis.p
+
+aq.scv.pis.p <- ggplot() +
+  geom_sf(data = aq.all.HR %>% filter(Species == "Scvetula"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = aq.all.CU %>% filter(Species == "Scvetula"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = aq.all.pis %>% filter(Species == "Scvetula"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = aq.all.ctr %>% filter(Species == "Scvetula"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Aquarius", subtitle = expression(paste("TP", italic(" Sc. vetula"))))
+aq.scv.pis.p
+
+aq.sct.pis.p <- ggplot() +
+  geom_sf(data = aq.all.HR %>% filter(Species == "Sctaeniopterus"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = aq.all.CU %>% filter(Species == "Sctaeniopterus"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = aq.all.pis %>% filter(Species == "Sctaeniopterus"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = aq.all.ctr %>% filter(Species == "Sctaeniopterus"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black", "gray")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Aquarius", subtitle = expression(paste("TP", italic(" Sc. taeniopterus"))))
+aq.sct.pis.p
+```
+
+IV
+
+```{r}
+iv.all.HR <- IV95shp %>%
+  filter(Phase == "TP" & Date > "2021-05-31") %>%
+  st_transform(iv.all.HR, crs = 32619)
+
+#Create geometry with no holes for each. We assume that small holes in the center of the home ranges were likely artefacts. Will use this to compute the distance that interactions occurred from home range boundaries below.
+iv.all.HR.sm <- fill_holes(iv.all.HR, threshold = min(iv.all.HR$area)/2)
+
+iv.all.CU <- IV95shp2 %>%
+  filter(Phase == "TP" & Date > "2021-05-31") %>%
+  st_transform(iv.all.CU, crs = 32619)
+
+iv.all.pis <- bhav.locations %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_") %>%
+  filter(Site == "IV" & Phase == "TP" & Date > "2021-05-31" & Int.ID != "None-None") %>%
+  drop_na(c("lon","lat")) %>%
+  st_as_sf(coords = c("lon", "lat")) %>%
+  st_set_crs(4326) %>%
+  st_transform(iv.all.pis, crs = 32619)
+
+iv.all.ctr <- IVcent %>%
+  filter(Phase == "TP" & Date > "2021-05-31") %>%
+  st_transform(crs = 32619)
+```
+
+Plot
+
+```{r}
+iv.spv.pis.p <- ggplot() +
+  geom_sf(data = iv.all.HR %>% filter(Species == "Spviride"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = iv.all.CU %>% filter(Species == "Spviride"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = iv.all.pis %>% filter(Species == "Spviride"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = iv.all.ctr %>% filter(Species == "Spviride"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Invisibles", subtitle = expression(paste("TP", italic(" Sp. viride"))))
+iv.spv.pis.p
+
+iv.spa.pis.p <- ggplot() +
+  geom_sf(data = iv.all.HR %>% filter(Species == "Spaurofrenatum"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = iv.all.CU %>% filter(Species == "Spaurofrenatum"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = iv.all.pis %>% filter(Species == "Spaurofrenatum"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = iv.all.ctr %>% filter(Species == "Spaurofrenatum"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Invisibles", subtitle = expression(paste("TP", italic(" Sp. aurofrenatum"))))
+iv.spa.pis.p
+
+iv.scv.pis.p <- ggplot() +
+  geom_sf(data = iv.all.HR %>% filter(Species == "Scvetula"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = iv.all.CU %>% filter(Species == "Scvetula"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = iv.all.pis %>% filter(Species == "Scvetula"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = iv.all.ctr %>% filter(Species == "Scvetula"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Invisibles", subtitle = expression(paste("TP", italic(" Sc. vetula"))))
+iv.scv.pis.p
+
+iv.sct.pis.p <- ggplot() +
+  geom_sf(data = iv.all.HR %>% filter(Species == "Sctaeniopterus"), inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = iv.all.CU %>% filter(Species == "Sctaeniopterus"), inherit.aes = FALSE, size = 1, alpha = 0.5, color = "black") +
+  geom_sf(data = iv.all.pis %>% filter(Species == "Sctaeniopterus"), 
+          aes(color = Int.ID), inherit.aes = FALSE, alpha = 1, size = 4) +
+  geom_sf(data = iv.all.ctr %>% filter(Species == "Sctaeniopterus"), inherit.aes = FALSE, shape = 8, alpha = 1, size = 3) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_shape_manual(values = c(0, 15, 17)) +
+  scale_color_manual(values = c("red", "blue", "black", "gray")) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        axis.title = element_blank()) + 
+  ggtitle("Invisibles", subtitle = expression(paste("TP", italic(" Sc. taeniopterus"))))
+iv.sct.pis.p
+```
+
+
+#Compute the distance that each interaction occurred from the barycenter (Db) and edge (De) of the home range of the focal terminal phase parrotfish
+
+AQ
+
+```{r}
+library(units)
+
+aq.all.HR.pts <- aq.all.HR.sm %>% st_cast("MULTIPOINT") #use geometry without holes, likely artefacts
+
+aq.pis.d <- inner_join(aq.all.pis %>% as.data.frame(), aq.all.ctr %>% as.data.frame(), 
+                       by = c("Site", "Species", "Phase", "Date", "EndTime"))
+aq.pis.dp <- inner_join(aq.pis.d %>% as.data.frame(), aq.all.HR.pts %>% as.data.frame(), 
+                        by = c("Site", "Species", "Phase", "Date", "EndTime"))
+
+aq.pis.dp.fin <- aq.pis.dp %>% 
+  st_sf(sf_column_name = 'geometry.x') %>%
+  group_by(Site, Species, Phase, Date, EndTime) %>%
+  mutate(Db = st_distance(geometry.x, geometry.y, by_element = T)) %>%
+  mutate(De = st_distance(geometry.x, geometry, by_element = T)) %>%
+  drop_units() 
+
+str(aq.pis.dp.fin)
+st_crs(aq.pis.dp.fin)
+```
+
+IV
+
+```{r}
+iv.all.HR.pts <- iv.all.HR.sm %>% st_cast("MULTIPOINT") #use geometry without holes, likely artefacts
+
+iv.pis.d <- inner_join(iv.all.pis %>% as.data.frame(), iv.all.ctr %>% as.data.frame(), 
+                       by = c("Site", "Species", "Phase", "Date", "EndTime"))
+iv.pis.dp <- inner_join(iv.pis.d %>% as.data.frame(), iv.all.HR.pts %>% as.data.frame(), 
+                        by = c("Site", "Species", "Phase", "Date", "EndTime"))
+
+iv.pis.dp.fin <- iv.pis.dp %>% 
+  st_sf(sf_column_name = 'geometry.x') %>%
+  group_by(Site, Species, Phase, Date, EndTime) %>%
+  mutate(Db = st_distance(geometry.x, geometry.y, by_element = T)) %>%
+  mutate(De = st_distance(geometry.x, geometry, by_element = T)) %>%
+  drop_units()
+
+str(iv.pis.dp.fin)
+st_crs(iv.pis.dp.fin)
+```
+
+Let's drop geometries and summarise to look for patterns.
+
+```{r}
+aq.pdist <- aq.pis.dp.fin %>%
+  st_drop_geometry() %>%
+  select(-c(geometry.y, M5))
+
+iv.pdist <- iv.pis.dp.fin %>%
+  st_drop_geometry() %>%
+  select(-c(geometry.y, M5))
+
+tot.pdist <- rbind(aq.pdist, iv.pdist)
+
+#Summary of focal interactions with different interactors, for each species
+
+pdist.sum <- tot.pdist %>%
+  group_by(Species, Phase, Int.ID) %>%
+  summarise(N = n(),
+            mDuration = mean(Duration),
+            seDuration = sd(Duration)/sqrt(N),
+            mDist.b = mean(Db),
+            seDist.b = sd(Db)/sqrt(N),
+            mdDist.e = median(De),
+            mDist.e = mean(De),
+            seDist.e = sd(De)/sqrt(N))
+pdist.sum
+
+#Summary for each interaction type (i.e., focal terminal phase interactions with intra- and interspecific IPs and intra- and TPs), regardless of species.
+
+pdist.sum2 <- tot.pdist %>%
+  group_by(Int.ID) %>%
+  summarise(N = n(),
+            mDuration = mean(Duration),
+            seDuration = sd(Duration)/sqrt(N),
+            mDist.b = mean(Db),
+            seDist.b = sd(Db)/sqrt(N),
+            mdDist.e = median(De),
+            mDist.e = mean(De),
+            seDist.e = sd(De)/sqrt(N))
+pdist.sum2
+
+#Summary for each species separately, all interactions included.
+
+pdist.sum3 <- tot.pdist %>%
+  group_by(Species) %>%
+  summarise(N = n(),
+            mDuration = mean(Duration),
+            seDuration = sd(Duration)/sqrt(N),
+            mDist.b = mean(Db),
+            seDist.b = sd(Db)/sqrt(N),
+            mDist.e = mean(De),
+            seDist.e = sd(De)/sqrt(N))
+pdist.sum3
+
+#Summary of all TP-TP interactions (intraspecific and interspecific)
+
+pdist.sum4 <- tot.pdist %>%
+  filter(Int.ID != "IP-Conspecific" & Int.ID != "IP-Heterospecific") %>%
+  group_by() %>%
+  summarise(N = n(),
+            mDuration = mean(Duration),
+            seDuration = sd(Duration)/sqrt(N),
+            mDist.b = mean(Db),
+            seDist.b = sd(Db)/sqrt(N),
+            mDist.e = mean(De),
+            seDist.e = sd(De)/sqrt(N))
+pdist.sum4
+```
+Summary of focal interactions with different interactors, for each species
+
+   Species        Phase Int.ID                N mDuration seDuration mDist.b seDist.b mdDist.e mDist.e seDist.e
+   <chr>          <chr> <chr>             <int>     <dbl>      <dbl>   <dbl>    <dbl>    <dbl>   <dbl>    <dbl>
+ 1 Sctaeniopterus TP    IP-Conspecific      158      5.14      0.377    2.98    0.122     2.94    2.82   0.0798
+ 2 Sctaeniopterus TP    IP-Heterospecific    30      1.8       0.260    2.56    0.331     3.15    2.90   0.160 
+ 3 Sctaeniopterus TP    TP-Conspecific       70     11.0       0.699    3.30    0.200     2.65    2.55   0.119 
+ 4 Sctaeniopterus TP    TP-Heterospecific    13      2.92      0.738    2.31    0.300     2.71    2.80   0.244 
+ 5 Scvetula       TP    IP-Conspecific       74      5.31      0.484    5.91    0.315     3.46    3.38   0.159 
+ 6 Scvetula       TP    TP-Conspecific       14     17.8       3.90     8.58    0.726     1.84    2.13   0.295 
+ 7 Scvetula       TP    TP-Heterospecific     2      2         1        5.23    1.42      2.45    2.45   0.467 
+ 8 Spaurofrenatum TP    IP-Conspecific       38      6.53      0.892    4.68    0.375     3.07    3.12   0.213 
+ 9 Spaurofrenatum TP    TP-Conspecific       43     17.1       1.73     5.42    0.416     2.45    2.81   0.235 
+10 Spviride       TP    IP-Conspecific       22      3.82      0.541    7.17    0.645     3.57    3.20   0.276 
+11 Spviride       TP    TP-Conspecific       23     21         4.62     7.35    0.727     2.78    2.95   0.289 
+12 Spviride       TP    TP-Heterospecific     3      2.67      1.20     7.59    2.56      2.24    2.93   0.921  
+
+
+Summary of all TP-TP interactions (intraspecific and interspecific). Use this to determine neighbor distances
+
+      N mDuration seDuration mDist.b seDist.b mDist.e seDist.e
+  <int>     <dbl>      <dbl>   <dbl>    <dbl>   <dbl>    <dbl>
+1   168      13.6      0.964    4.86    0.235    2.66   0.0943
+
+
+#Statistical analyses of agonistic interactions between the focal terminal phase parrotfishes and other parrotfishes
+
+```{r}
+tot.pdist.analysis <- tot.pdist %>%
+  unite("ID", c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_", remove = F) %>%
+  mutate(logdur = log10(Duration))
+
+##How many interacted with other parrotfishes?
+
+n_distinct(tot.pdist.analysis$ID)
+
+##Interaction durations
+
+dur.glm <- glmmTMB(data = tot.pdist.analysis, logdur ~ Site + Species + Int.ID + (1|ID), gaussian(link = "identity"))
+
+check_collinearity(dur.glm) ##no collinearity between Site, Species, and Int.ID
+
+test.dur.glm <- simulateResiduals(fittedModel = dur.glm, n = 250, plot = T) #Normal and there is no heteroscedasticity
+plotResiduals(test.dur.glm) #looks good
+testDispersion(test.dur.glm) #meets dispersion assumptions
+testOutliers(test.dur.glm) #outlier test is not significant
+
+summary(dur.glm)
+options(contrasts = c("contr.sum", "contr.poly"))
+glmm.int.dur.anova <- Anova(dur.glm, type = 3)
+glmm.int.dur.anova
+
+write.table(glmm.int.dur.anova, file = "StatisticalOutputs/Interaction.Dur.GLMM.ANOVA.txt",
+            sep = ",", quote = F, row.names = T)
+```
+Family: gaussian  ( identity )
+Formula:          logdur ~ Site + Species + Int.ID + (1 | ID)
+Data: tot.pdist.analysis
+
+     AIC      BIC   logLik deviance df.resid 
+   293.0    334.9   -136.5    273.0      480 
+
+Random effects:
+
+Conditional model:
+ Groups   Name        Variance Std.Dev.
+ ID       (Intercept) 0.007937 0.08909 
+ Residual             0.096059 0.30993 
+Number of obs: 490, groups:  ID, 84
+
+Dispersion estimate for gaussian family (sigma^2): 0.0961 
+
+Conditional model:
+             Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  0.585379   0.031832  18.390  < 2e-16 ***
+Site1        0.033630   0.018318   1.836   0.0664 .  
+Species1    -0.052424   0.028271  -1.854   0.0637 .  
+Species2    -0.004689   0.037202  -0.126   0.8997    
+Species3     0.052646   0.036116   1.458   0.1449    
+Int.ID1      0.023533   0.030674   0.767   0.4430    
+Int.ID2     -0.293756   0.054327  -5.407  6.4e-08 ***
+Int.ID3      0.492430   0.033432  14.729  < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+
+Response: logdur
+               Chisq Df Pr(>Chisq)    
+(Intercept) 338.1748  1    < 2e-16 ***
+Site          3.3705  1    0.06637 .  
+Species       4.7460  3    0.19137    
+Int.ID      260.3719  3    < 2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+```{r}
+##Interaction counts
+tot.pdist.counts <- tot.pdist.analysis %>%
+  group_by(ID, Site, Species, Phase, Date, EndTime, Int.ID) %>%
+  summarise(N = n()) %>%
+  left_join(follow.time) %>%
+  spread(key = Int.ID, value = N) %>%
+  replace(is.na(.), 0) %>%
+  gather(key = Int.ID, value = N, `IP-Conspecific`:`TP-Heterospecific`)
+  
+nb.c <- glmmTMB(N ~ Site + Species + Int.ID, offset = log(Follow.Time), family=nbinom2, data=tot.pdist.counts)
+
+test.nb.c <- simulateResiduals(fittedModel = nb.c, n = 250, plot = T)
+testDispersion(test.nb.c) #dispersion was okay
+testOutliers(test.nb.c) #outlier test not significant
+testZeroInflation(test.nb.c) #no significant zero-inflation
+
+summary(nb.c)
+nb.c.ANOVA <- Anova(nb.c, type = 3)
+nb.c.ANOVA
+
+write.table(nb.c.ANOVA, file = "StatisticalOutputs/Interaction.Count.GLM.ANOVA.txt",
+            sep = ",", quote = F, row.names = T)
+```
+Family: nbinom2  ( log )
+Formula:          N ~ Site + Species + Int.ID
+Data: tot.pdist.counts
+ Offset: log(Follow.Time)
+
+     AIC      BIC   logLik deviance df.resid 
+   922.9    957.3   -452.5    904.9      327 
+
+
+Dispersion parameter for nbinom2 family (): 1.22 
+
+Conditional model:
+            Estimate Std. Error z value Pr(>|z|)    
+(Intercept) -3.41768    0.10396  -32.88  < 2e-16 ***
+Site1       -0.03676    0.07716   -0.48    0.634    
+Species1     0.62974    0.11982    5.26 1.47e-07 ***
+Species2    -0.14110    0.15048   -0.94    0.348    
+Species3    -0.15842    0.14720   -1.08    0.282    
+Int.ID1      1.45359    0.12679   11.46  < 2e-16 ***
+Int.ID2     -0.92020    0.17765   -5.18 2.22e-07 ***
+Int.ID3      0.83339    0.13431    6.20 5.48e-10 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+Response: N
+               Chisq Df Pr(>Chisq)    
+(Intercept) 1080.781  1  < 2.2e-16 ***
+Site           0.227  1     0.6338    
+Species       27.650  3  4.301e-06 ***
+Int.ID       160.757  3  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+```{r}
+##Interaction distance from edge
+
+dist.edge.glm <- glmmTMB(De ~ Site + Species + Int.ID + (1|ID), gaussian(link = "identity"), data = tot.pdist.analysis)
+
+test.dist.edge.glm <- simulateResiduals(fittedModel = dist.edge.glm, n = 250, plot = T) #Normal and there is no heteroscedasticity
+plotResiduals(test.dist.edge.glm) #looks good
+testDispersion(test.dist.edge.glm) #meets dispersion assumptions
+testOutliers(test.dist.edge.glm) #outlier test is not significant
+
+summary(dist.edge.glm)
+
+options(contrasts = c("contr.sum", "contr.poly"))
+glmm.int.dist.edge.anova <- Anova(dist.edge.glm, type = 3)
+glmm.int.dist.edge.anova
+
+write.table(glmm.int.dist.edge.anova, 
+            file = "StatisticalOutputs/Interaction.Distance.GLMM.ANOVA.txt",
+            sep = ",", quote = F, row.names = T)
+```
+Family: gaussian  ( identity )
+Formula:          De ~ Site + Species + Int.ID + (1 | ID)
+Data: tot.pdist.analysis
+
+     AIC      BIC   logLik deviance df.resid 
+  1558.5   1600.5   -769.3   1538.5      480 
+
+Random effects:
+
+Conditional model:
+ Groups   Name        Variance Std.Dev.
+ ID       (Intercept) 0.07991  0.2827  
+ Residual             1.28756  1.1347  
+Number of obs: 490, groups:  ID, 84
+
+Dispersion estimate for gaussian family (sigma^2): 1.29 
+
+Conditional model:
+            Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  2.95342    0.11334  26.057  < 2e-16 ***
+Site1        0.04374    0.06398   0.684  0.49416    
+Species1    -0.28498    0.09939  -2.867  0.00414 ** 
+Species2     0.06811    0.13087   0.520  0.60273    
+Species3     0.05685    0.12806   0.444  0.65709    
+Int.ID1      0.17913    0.11029   1.624  0.10436    
+Int.ID2      0.07527    0.19370   0.389  0.69759    
+Int.ID3     -0.23573    0.12065  -1.954  0.05071 .  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+Response: De
+               Chisq Df Pr(>Chisq)    
+(Intercept) 678.9660  1    < 2e-16 ***
+Site          0.4675  1    0.49416    
+Species       8.2323  3    0.04145 *  
+Int.ID       11.3974  3    0.00976 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+```{r}
+##Intensity of Interactions
+Intensity <- tot.pdist %>%
+  group_by(Species, Int.ID, Intensity) %>%
+  summarise(N = n(),
+            mDuration = mean(Duration),
+            seDuration = sd(Duration)/sqrt(N),
+            mDistE = mean(De),
+            seDistE = sd(De)/sqrt(N))
+Intensity
+
+IntensityInTenCities <- table(tot.pdist$Int.ID, tot.pdist$Intensity)
+IntensityInTenCities
+
+fisher.test(IntensityInTenCities)
+```
+Fisher's Exact Test for Count Data
+
+data:  IntensityInTenCities
+p-value = 9.054e-09
+alternative hypothesis: two.sided
+
+
+#Plot the results of the interaction analyses
+
+```{r}
+#Plot
+int.counts.p <- ggplot(tot.pdist.counts, aes(x=Int.ID, y=N)) +
+  geom_boxplot(outlier.size = 1, size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  ylab("Counts") +
+  xlab("") + 
+  theme(text = element_text(color = "black"),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 12)) +
+  scale_x_discrete(labels=c("IP-Conspecific" = "IP - Intraspecific", 
+                            "TP-Conspecific" = "TP - Intraspecific", 
+                            "TP-Heterospecific" = "TP - Interspecific",
+                            "IP-Heterospecific" = "IP - Interspecific"))
+int.counts.p
+
+int.dur.p <- ggplot(tot.pdist, aes(x=Int.ID, y=Duration)) +
+  geom_boxplot(outlier.size = 1, size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  ylab("Duration (s)") +
+  xlab("") + 
+  theme(text = element_text(color = "black"),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 12)) +
+  scale_x_discrete(labels=c("IP-Conspecific" = "IP - Intraspecific", 
+                            "TP-Conspecific" = "TP - Intraspecific", 
+                            "TP-Heterospecific" = "TP - Interspecific",
+                            "IP-Heterospecific" = "IP - Interspecific"))
+int.dur.p
+
+int.dist.p <- ggplot(tot.pdist, aes(x=Int.ID, y=De)) +
+  geom_boxplot(outlier.size = 1, size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  ylab("Dist. to Edge (m)") +
+  xlab("") + 
+  theme(text = element_text(color = "black"),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 12)) +
+  scale_x_discrete(labels=c("IP-Conspecific" = "IP - Intraspecific", 
+                            "TP-Conspecific" = "TP - Intraspecific", 
+                            "TP-Heterospecific" = "TP - Interspecific",
+                            "IP-Heterospecific" = "IP - Interspecific"))
+int.dist.p
+
+interactions.p <- ggarrange(int.counts.p, int.dur.p, int.dist.p,
+                     labels = c("a", "b", "c"),
+                     ncol = 1, nrow = 3, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+interactions.p
+
+ggsave("Figures/Fig2.png", plot = interactions.p,
+       width = 6, height = 6, dpi = 300)
+```
+
+
+```{r}
+int.counts.p2 <- ggplot(tot.pdist.counts, aes(x=Species, y=N)) +
+  geom_boxplot(outlier.size = 1, size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  ylab("Counts") +
+  xlab("") +
+  scale_x_discrete(labels=c("Sctaeniopterus" = "Sc. taeniopterus", 
+                            "Scvetula" = "Sc. vetula", 
+                            "Spaurofrenatum" = "Sp. aurofrenatum",
+                            "Spviride" = "Sp. viride")) + 
+  theme(text = element_text(color = "black"),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 12),
+        axis.text.x = element_text(face = "italic"))
+int.counts.p2
+
+
+int.dist.p2 <- ggplot(tot.pdist, aes(x=Species, y=De)) +
+  geom_boxplot(outlier.size = 1, size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  ylab("Dist. to Edge (m)") +
+  xlab("") +
+  scale_x_discrete(labels=c("Sctaeniopterus" = "Sc. taeniopterus", 
+                            "Scvetula" = "Sc. vetula", 
+                            "Spaurofrenatum" = "Sp. aurofrenatum",
+                            "Spviride" = "Sp. viride")) + 
+  theme(text = element_text(color = "black"),
+        axis.text = element_text(size = 10),
+        axis.title = element_text(size = 12),
+        axis.text.x = element_text(face = "italic"))
+int.dist.p2
+
+
+interactions.p2 <- ggarrange(int.counts.p2, int.dist.p2,
+                     labels = c("a ", "b "),
+                     ncol = 1, nrow = 2, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+interactions.p2
+
+ggsave("Figures/FigS2.png", plot = interactions.p2,
+       width = 6, height = 4, dpi = 300)
+```
+
+
+#Take a look at the composition of interspecific agonistic interactions.
+
+```{r}
+heterospecific <- tot.pdist %>%
+  filter(Int.ID != "IP-Conspecific" & Int.ID != "TP-Conspecific") %>%
+  group_by(Species, Int.ID, Int.Sp) %>%
+  summarise(N = n())
+heterospecific
+
+sum(heterospecific$N)
+
+# 44/48 = 91.7% of all interspecific agonisms involved TP Sc. taeniopterus.
+# 23/44 = 52.3% were with IP Sc. vetula.
+
+
+heterospecific2 <- tot.pdist %>%
+  filter(Int.ID != "IP-Conspecific" & Int.ID != "TP-Conspecific" & Int.ID != "IP-Heterospecific") %>%
+  group_by(Species, Int.ID, Int.Sp) %>%
+  summarise(N = n())
+heterospecific2
+
+sum(heterospecific2$N)
+
+# 14/18 = 77.8% of the TP-TP interspecific agonisms involved TP Sc. taeniopterus.
+# 7/14 = 50.0% with TP Sc. iseri
+# 3/14 = 21.4% with TP Sc. vetula
+# 2/14 = 14.3% with TP Sp. aurofrenatum
+# 2/14 = 14.3% with TP Sp. viride
+```
+
+
+
+##New Example Plot of Interaction Locations for Supplement.
+
+```{r}
+aq.scv.pis.p2 <- ggplot() +
+  geom_sf(data = aq.all.CU %>% filter(Species == "Scvetula"), aes(fill = EndTime), 
+          inherit.aes = FALSE, size = 0, alpha = 1) +
+  geom_sf(data = aq.all.HR %>% filter(Species == "Scvetula"), aes(fill = EndTime), 
+          inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = aq.all.pis %>% filter(Species == "Scvetula"), 
+          aes(shape = Int.ID), inherit.aes = FALSE, alpha = 1, size = 2.5) +
+  coord_sf(datum = st_crs(32619)) +
+  scale_x_continuous("Easting (m)", limits = c(577640,577710), breaks = c(577650, 577675, 577700)) +
+  scale_y_continuous("Northing (m)", limits = c(1337420, 1337560), breaks = c(1337420, 1337455, 1337490, 1337525, 1337560)) +
+  scale_shape_manual(labels = c("IP - Intraspecific", "TP - Intraspecific"), values = c(1,19)) +
+  theme_classic() +
+  theme(text=element_text(family="Arial"),
+        axis.text = element_text(size = 10, color = "black"),
+        axis.title = element_text(size = 12, color = "black"),
+        panel.border = element_rect(color = "black", fill=NA, size=2),
+        legend.text = element_text(size = 10, color = "black"),
+        legend.title = element_text(size = 12, color = "black")) +
+  guides(fill = "none") +
+  labs(shape = "Interactor Identity") +
+  scale_fill_manual(values = brewer.pal(12, "Paired"))
+aq.scv.pis.p2
+
+ggsave("Figures/FigS6.png", plot = aq.scv.pis.p2,
+       width = 6, height = 6, dpi = 300)
+```
+
+
+##Plot home range example with buffer for interactions.
+
+```{r}
+library(nngeo)
+
+#summarise by Species, Phase, and look only at TP intraspecific interaction distances from the edge.
+tot.pdist.summary <- tot.pdist %>%
+  group_by(Species, Phase, Int.ID) %>%
+  summarise(mDe = mean(De)) %>%
+  filter(Int.ID == "TP-Conspecific") %>%
+  select(-Int.ID)
+tot.pdist.summary
+
+
+#create sf object of all HRs (true, including holes) and CUs
+all.HRs.true <- rbind(aq.all.HR, iv.all.HR) %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP") & Date > "2021-05-31")
+
+all.CUs <- rbind(aq.all.CU, iv.all.CU) %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP") & Date > "2021-05-31")
+
+#remove holes to create buffers from outer edge
+all.HRs <- rbind(aq.all.HR, iv.all.HR) %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP") & Date > "2021-05-31") %>%
+  full_join(tot.pdist.summary) %>%
+  st_remove_holes()
+
+#Create buffer using the outer edge of the home ranges and the mean distance of TP-TP interactions from the boundary
+all.HRs.bufferless2 <- all.HRs %>%
+  st_buffer(dist = -all.HRs$mDe)
+
+
+#centroids for home ranges
+all.centroids <- all.HRs %>%
+  st_centroid()
+
+buffers.p <- ggplot() +
+  geom_sf(data = all.CUs %>% filter(Species == "Scvetula" & Site == "AQ"), aes(fill = EndTime), 
+          inherit.aes = FALSE, size = 0, alpha = 1) +
+  geom_sf(data = all.HRs.true %>% filter(Species == "Scvetula" & Site == "AQ"), aes(fill = EndTime), 
+          inherit.aes = FALSE, size = 1, alpha = 0.2, color = "black") +
+  geom_sf(data = all.HRs.bufferless2 %>% filter(Species == "Scvetula" & Site == "AQ"), aes(fill = EndTime), 
+          inherit.aes = FALSE, lty = "dashed", size = 1, alpha = 0, color = "black") +
+  geom_sf(data = all.centroids %>% filter(Species == "Scvetula" & Site == "AQ"), aes(fill = EndTime), 
+          inherit.aes = FALSE, size = 1, alpha = 0, color = "black") +
+  coord_sf(datum = st_crs(32619)) +
+  scale_x_continuous(breaks = c(577650, 577675, 577700)) +
+  scale_y_continuous(breaks = c(1337420, 1337490, 1337560)) +
+  labs(x = "Easting (m)", y = "Northing (m)") +
+  theme_classic() +
+  theme(text=element_text(family="Arial", color = "black"),
+        axis.title = element_text(size = 12),
+        axis.text = element_text(size = 10),
+        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        legend.position = "none") +
+  scale_fill_manual(values = brewer.pal(12, "Paired"))
+buffers.p
+
+ggsave("Figures/FigS7.png", plot = buffers.p,
+       width = 6, height = 6, dpi = 300)
+```
+
+
+
+
+##Identify neighbors, defined here as individuals that had home ranges within 2.66 meters of one another (average distance from home range edge of interactions between TPs across all species).
+
+```{r}
+aq.neigh <- st_intersection(AQ95shp, st_buffer(AQ95shp, 2.66)) %>%
+  st_drop_geometry() %>%
+  filter(!grepl("2021-05-", Date) & !grepl("2021-05-", Date.1)) %>% #remove initial tracks of Sp viride before tiles
+  filter(Species != "Sciseri" & Species.1 != "Sciseri") %>% #remove Sc iseri tracks
+  filter(Phase != "IP" & Phase.1 != "IP") %>% #remove spatial interactions with IPs which will be treated elsewhere
+  filter(Phase != "NTP" & Phase.1 != "NTP") %>% #remove the non-territorial floaters which will be treated elsewhere
+  `rownames<-` (NULL) 
+  
+aq.neigh2 <- subset(aq.neigh, (ID != ID.1)) #remove overlap estimates of each individual with itself (removed 44)
+
+iv.neigh <- st_intersection(IV95shp, st_buffer(IV95shp, 2.68)) %>%
+  st_drop_geometry() %>%
+  filter(!grepl("2021-05-", Date) & !grepl("2021-05-", Date.1)) %>% #remove initial tracks of Sp viride before tiles
+  filter(Species != "Sciseri" & Species.1 != "Sciseri") %>% #remove Sc iseri tracks
+  filter(Species != "Scguacamaia" & Species.1 != "Scguacamaia") %>% #remove one Sc guacamaia track
+  filter(Phase != "IP" & Phase.1 != "IP") %>% #remove spatial interactions with IPs which will be treated elsewhere
+  filter(Phase != "NTP" & Phase.1 != "NTP") %>% #remove the non-territorial floaters which will be treated elsewhere
+  `rownames<-` (NULL) 
+
+iv.neigh2 <- subset(iv.neigh, (ID != ID.1)) #remove overlap estimates of each individual with itself (removed 42)
+
+#Total same individual removals is 86, matching the number of TP Sc. taeniopterus, Sc. vetula, Sp. aurofrenatum, and Sp. viride
+
+neighbs <- rbind(aq.neigh2, iv.neigh2) %>%
+  select(!c(2:7,9:14)) %>%
+  rename(id1 = "ID",
+         id2 = "ID.1")
+
+##Will merge this with BA overlaps later.
+```
+
+
+
+
+##Static Interaction Analyses
+
+Estimate Overlaps of home ranges using 'kerneloverlaphr' in adehabitatHR package, specifying the Bhattacharyya's Affinity method
+
+```{r}
+aqBA <- kerneloverlaphr(aqud, method = "BA", conditional = T, percent = 95)
+ivBA <- kerneloverlaphr(ivud, method = "BA", conditional = T, percent = 95)
+```
+
+Now, let's clean up these dataframes
+
+```{r}
+#rownames to column
+aqBA <- tibble::rownames_to_column(as.data.frame(aqBA), "id1")
+ivBA <- tibble::rownames_to_column(as.data.frame(ivBA), "id1")
+
+#convert to long format
+aqBA.l <- pivot_longer(aqBA, cols = c(2:ncol(aqBA)), names_to = "id2", values_to = "BA95")
+ivBA.l <- pivot_longer(ivBA, cols = c(2:ncol(ivBA)), names_to = "id2", values_to = "BA95")
+
+overlap <- as.data.frame(rbind(aqBA.l, ivBA.l))
+overlap$BA95 <- overlap$BA95/0.95 #divide by 0.95 to make the proportions between 0 and 1
+
+overlap2 <- subset(overlap, (id1 != id2)) #remove overlap estimates of each individual with itself (all ~1; removes 170)
+overlap.nd <- overlap2[!duplicated(t(apply(overlap2, 1, sort))), ] #remove reciprocal comparisons (duplicates);1/2 the dataset
+
+overlap.n0 <- overlap.nd %>% 
+  left_join(id1.sl.har) %>% #this adds the body size and harem size for each fish
+  left_join(id2.sl.har) %>% #this adds the body size and harem size for each fish
+  filter(BA95 > 0) #removes pairs with no overlap
+
+ovlp <- overlap.n0 %>%
+  separate(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_") %>%
+  separate(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_") %>%
+  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column for the time between tracks
+  mutate(diff.sl = abs(SL1 - SL2))
+
+write.csv(ovlp, "ProcessedData/HRoverlap.csv", row.names = F)
+```
+
+Merge with the neighbor data above
+
+```{r}
+#Use the overlap data sets without the duplicate values, and filter to include only what we need. 
+ovlpfin <- overlap2 %>%
+  filter(BA95 > 0) %>%
+  separate("id1", c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>% 
+  separate("id2", c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
+  filter(!grepl("2021-05-", Date1) & !grepl("2021-05-", Date2)) %>% #remove initial tracks of Sp viride before June 2021
+  filter(Species1 != "Sciseri" & Species2 != "Sciseri") %>% #remove Sc iseri tracks
+  filter(Species1 != "Scguacamaia" & Species2 != "Scguacamaia") %>% #remove Sc guacamaia track
+  filter(Phase1 != "IP" & Phase2 != "IP") %>% #remove spatial interactions with IPs which will be treated elsewhere
+  filter(Phase1 != "NTP" & Phase2 != "NTP") %>% #remove the non-territorial floaters which will be treated elsewhere
+  select(-c(2:6, 8:12))
+
+
+#Merge with neighbor data frame
+neighboring <- neighbs %>%
+  full_join(ovlpfin) %>%
+  replace(is.na(.), 0)
+
+neighboring.fin <- neighboring[!duplicated(t(apply(neighboring, 1, sort))), ] %>% #remove reciprocal comparisons; 1/2 the dataset
+  separate("id2", c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
+  separate("id1", c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>%
+  unite("Interaction", c("Species2", "Species1"), sep = "-", remove = F) %>%
+  left_join(id1.sl.har) %>%
+  left_join(id2.sl.har) %>%
+  mutate(diff.sl = abs(SL1 - SL2))
+
+neighboring.fin$days <- abs(difftime(as.Date(neighboring.fin$Date1), as.Date(neighboring.fin$Date2), units = c("days")))
+
+neighboring.fin$Interaction <- as.factor(neighboring.fin$Interaction)
+
+mean(neighboring.fin$days)
+range(neighboring.fin$days)
+sd(neighboring.fin$days)
+nrow(neighboring.fin)
+```
+
+
+#Analysis to determine if interaction type influences the proportion of individuals who's home ranges and core areas overlap
+
+```{r}
+neighboring.sum <- neighboring.fin %>%
+  group_by(Interaction) %>%
+  summarise(N = n(),
+            HR.o = sum(BA95 > 0),
+            HR.no = sum(BA95 == 0),
+            HR.o.perc = HR.o/N)
+
+sum(neighboring.sum$N) #538, good
+mean(neighboring.sum$HR.o.perc) #75.9%
+range(neighboring.sum$HR.o.perc) #63.3-83.3% (Sc. taeniopterus - Sc. taeniopterus; Sp. aurofrenatum - Sp. aurofrenatum)
+range(1-neighboring.sum$HR.o.perc) #16.7-36.7% (Sp. aurofrenatum - Sp. aurofrenatum; Sc. taeniopterus - Sc. taeniopterus)
+```
+
+On average, 76% of neighboring pairs across all interaction types (range = 62-83%) had some degree of home range overlap. 
+
+
+
+
+##Static Interaction Analyses
+
+Use zero-inflated beta regression to analyze home range overlaps among neighbors (zeroes mean something biologically/ecologically).
+
+#Statistical Models
+
+```{r}
+library(MuMIn) #for AICc
+
+full.BA95.nv <- glmmTMB(BA95 ~ Site1 + Interaction + days + (1|id1),
+                        ziformula = ~ Site1 + Interaction + days,
+                        family = beta_family(link = "logit"),
+                        data = neighboring.fin)
+
+full.BA95.nv.r <- glmmTMB(BA95 ~ Interaction + (1|id1),
+                          ziformula = ~ Interaction,
+                          family = beta_family(link = "logit"),
+                          data = neighboring.fin)
+
+AICc(full.BA95.nv, full.BA95.nv.r) 
+# Reduced is a better fit
+#                df      AICc
+# full.BA95.nv   26 10.112023
+# full.BA95.nv.r 22  5.822269
+
+full.BA95.v <- glmmTMB(BA95 ~ Interaction + (1|id1), 
+                       ziformula = ~ Interaction,
+                       dispformula = ~ Interaction,
+                       family = beta_family(link = "logit"),
+                       data = neighboring.fin)
+
+AICc(full.BA95.nv.r, full.BA95.v) 
+# Variable fits much better
+#                df       AICc
+# full.BA95.nv.r 22   5.822269
+# full.BA95.v    31 -19.576644
+
+test.BA95 <- simulateResiduals(fittedModel = full.BA95.v, n = 250, plot = T) #looks good
+testZeroInflation(test.BA95) #looks good
+testDispersion(test.BA95) #meets dispersion assumptions
+testOutliers(test.BA95)
+
+summary(full.BA95.v)
+options(contrasts = c("contr.sum", "contr.poly"))
+Anova(full.BA95.v, type = 3)
+
+
+full.BA95.mm.resp <- emmeans(full.BA95.v, ~Interaction, component = "cond", type = "response") 
+full.BA95.mm.resp
+
+BA95.resp.p <- plot(full.BA95.mm.resp, color = c("black", "#1F78B4"), comparisons = T) + theme_classic() + 
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Spa","Spa-Spv","Spv-Spv")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+BA95.resp.p
+
+
+full.BA95.mm.zi <- emmeans(full.BA95.v, ~Interaction, component = "zi", type = "response")
+full.BA95.mm.zi
+
+BA95.zi.p <- plot(full.BA95.mm.zi, color = c("black", "#1F78B4"), comparisons = T) + theme_classic() + 
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Spa","Spa-Spv","Spv-Spv")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+BA95.zi.p
+
+
+full.BA95.mm.disp <- emmeans(full.BA95.v, ~Interaction, component = "disp", type = "response") 
+full.BA95.mm.disp
+
+BA95.disp.p <- plot(full.BA95.mm.disp, color = c("black", "#1F78B4"), comparison = T) + theme_classic() + 
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Spa","Spa-Spv","Spv-Spv")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+BA95.disp.p
+
+
+overlap.emm.p <- ggarrange(BA95.resp.p, BA95.zi.p + rremove("ylab"), BA95.disp.p + rremove("ylab"),
+                     labels = c("a ", "b ", "c "),
+                     ncol = 3, nrow = 1, align = "h",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+overlap.emm.p
+
+ggsave("Figures/BA95_model.png", plot = overlap.emm.p,
+       width = 6.5, height = 4, dpi = 300)
+```
+
+Family: beta  ( logit )
+Formula:          BA95 ~ Interaction + (1 | id1)
+Zero inflation:        ~Interaction
+Dispersion:            ~Interaction
+Data: neighboring.fin
+
+     AIC      BIC   logLik deviance df.resid 
+   -23.5    109.4     42.7    -85.5      507 
+
+Random effects:
+
+Conditional model:
+ Groups Name        Variance  Std.Dev. 
+ id1    (Intercept) 1.138e-10 1.067e-05
+Number of obs: 538, groups:  id1, 81
+
+Conditional model:
+             Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  -1.88417    0.06611 -28.503  < 2e-16 ***
+Interaction1 -0.02421    0.16034  -0.151 0.879975    
+Interaction2  0.61881    0.14413   4.294 1.76e-05 ***
+Interaction3  0.75613    0.14134   5.350 8.81e-08 ***
+Interaction4  0.42964    0.15132   2.839 0.004522 ** 
+Interaction5 -1.44486    0.28435  -5.081 3.75e-07 ***
+Interaction6  0.72911    0.16074   4.536 5.74e-06 ***
+Interaction7  0.52241    0.19538   2.674 0.007500 ** 
+Interaction8 -0.73013    0.22013  -3.317 0.000911 ***
+Interaction9  0.55868    0.17118   3.264 0.001100 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Zero-inflation model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)  -1.176840   0.119965  -9.810   <2e-16 ***
+Interaction1  0.630297   0.267970   2.352   0.0187 *  
+Interaction2 -0.091671   0.267088  -0.343   0.7314    
+Interaction3 -0.088826   0.247005  -0.360   0.7191    
+Interaction4 -0.084291   0.273466  -0.308   0.7579    
+Interaction5  0.483693   0.431069   1.122   0.2618    
+Interaction6 -0.162934   0.325832  -0.500   0.6170    
+Interaction7 -0.008784   0.330668  -0.027   0.9788    
+Interaction8 -0.432598   0.454303  -0.952   0.3410    
+Interaction9 -0.410125   0.348514  -1.177   0.2393    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Dispersion model:
+             Estimate Std. Error z value Pr(>|z|)    
+(Intercept)   1.75150    0.08928  19.619  < 2e-16 ***
+Interaction1  0.28843    0.22980   1.255  0.20943    
+Interaction2 -0.57080    0.17751  -3.216  0.00130 ** 
+Interaction3 -0.91441    0.16249  -5.627 1.83e-08 ***
+Interaction4 -0.49311    0.18622  -2.648  0.00810 ** 
+Interaction5  1.30932    0.39903   3.281  0.00103 ** 
+Interaction6 -0.44170    0.20667  -2.137  0.03258 *  
+Interaction7 -0.70623    0.22705  -3.110  0.00187 ** 
+Interaction8  0.58641    0.29749   1.971  0.04870 *  
+Interaction9 -0.58455    0.20719  -2.821  0.00478 ** 
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+
+Response: BA95
+             Chisq Df Pr(>Chisq)    
+(Intercept) 812.39  1  < 2.2e-16 ***
+Interaction 112.01  9  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+PWPP plot for visual analyses
+
+```{r}
+my.aes <- list(point = list(size = 0.5),
+               segment = list(linewidth = 0.1))
+
+library(wesanderson)
+wes.pal = c("#F4B5BD", "#FD6467", "#5B1A18", "#C52E19", "#AC9765", 
+            "#54D8B1", "#b67c3b", "#175149", "#0F0D0E", "#3A9AB2", 
+            "#91BAB6", "#BDC881", "#E3B710", "#EC7A05", "#EF5703",
+            "#9986A5", "#79402E", "#D9D0D3", "#8D8680")
+
+BA95.resp.pwpp <- pwpp(full.BA95.mm.resp, sort = F, values = T, aes = my.aes) + 
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Spa","Spa-Spv","Spv-Spv")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+BA95.resp.pwpp
+
+
+BA95.zi.pwpp <- pwpp(full.BA95.mm.zi, sort = F, values = T, aes = my.aes) + 
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Spa","Spa-Spv","Spv-Spv")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+BA95.zi.pwpp
+
+
+BA95.disp.pwpp <- pwpp(full.BA95.mm.disp, sort = F, values = T, aes = my.aes) +
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Spa","Spa-Spv","Spv-Spv")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+BA95.disp.pwpp
+
+
+BA95.emm.pwpp <- ggarrange(BA95.resp.pwpp + rremove("xlab") + rremove("ylab"), BA95.zi.pwpp + rremove("xlab"), 
+                           BA95.disp.pwpp + rremove("ylab"),
+                     labels = c("a ", "b ", "c "),
+                     ncol = 1, nrow = 3, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+BA95.emm.pwpp
+
+ggsave("Figures/BA95_model_pwpp.png", plot = BA95.emm.pwpp,
+       width = 6.5, height = 8, dpi = 300)
+```
+
+
+Plotting
+
+```{r}
+conflicts_prefer(dplyr::desc)
+
+TPTP.BA95.props<- neighboring.fin %>%
+  group_by(Interaction) %>%
+  summarise(N = n(),
+            BA95.pno = 100 - ((sum(BA95 > 0)/N)*100)) %>%
+  mutate(across(BA95.pno, round, 1)) %>%
+  mutate("PropNoHROverlap" = sprintf("%.1f", BA95.pno)) %>%
+  separate(Interaction, c("Species1", "Species2"), sep = "-") %>%
+  select(-BA95.pno)
+
+TPTP.BA95.props$Species1 <- sub("(^..)", "\\1.", TPTP.BA95.props$Species1)
+TPTP.BA95.props$Species2 <- sub("(^..)", "\\1.", TPTP.BA95.props$Species2)
+TPTP.BA95.props
+
+
+TPTP.BA95.sum <- neighboring.fin %>%
+  group_by(Interaction) %>%
+  filter(BA95 > 0) %>%
+  summarise(N = n(),
+            mBA95 = mean(BA95),
+            seBA95 = sd(BA95)/sqrt(N)) %>%
+  mutate(across(mBA95:seBA95, round, 2)) %>%
+  mutate("BA95" = sprintf("%.2f\u00B1%.2f", mBA95, seBA95)) %>%
+  separate(Interaction, c("Species1", "Species2"), sep = "-") %>%
+  select(-N)
+
+TPTP.BA95.sum$Species1 <- sub("(^..)", "\\1.", TPTP.BA95.sum$Species1)
+TPTP.BA95.sum$Species2 <- sub("(^..)", "\\1.", TPTP.BA95.sum$Species2)
+TPTP.BA95.sum
+
+
+TPTP.BA.sum <- TPTP.BA95.props %>%
+  full_join(TPTP.BA95.sum)
+  
+
+BA95.hm <- ggplot(data = TPTP.BA.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mBA95), parse = F) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "white", high = "#1F78B4", limit = c(0,0.31), 
+                       space = "Lab", name="Spatial\nOverlap", label = function(x) sprintf("%.2f", x)) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, size = 10, face = "italic", color = "black", 
+                                   hjust = 1, vjust = 0.5, family = "Arial"),
+       axis.text.y = element_text(size = 10, face = "italic", color = "black", vjust = 0.5, family = "Arial"),
+       axis.ticks = element_blank()) + 
+  coord_fixed() +
+  geom_text(aes(label = `BA95`, family = "Arial"), vjust = -1, size = 2.5) +
+  geom_text(aes(label = `PropNoHROverlap`, family = "Arial"), vjust = -1, size = 2.5, nudge_y = -0.25) +
+  labs(x = "Species 2", y = "Species 1") +
+  scale_x_discrete(labels=c("Spv", "Spa", "Scv", "Sct")) +
+  scale_y_discrete(labels=c("Sct", "Scv", "Spa", "Spv")) 
+BA95.hm
+```
+
+
+#Use the function 'kerneloverlaphr' in adehabitatHR package to determine probability of finding neighbors in one another's home range and core areas (i.e., PHR method in Fieberg and Kochanny 2005 J. Wildlife Management)
+
+Home range
+
+```{r}
+aqPHR95 <- kerneloverlaphr(aqud, method = "PHR", conditional = T, percent = 95)
+ivPHR95 <- kerneloverlaphr(ivud, method = "PHR", conditional = T, percent = 95)
+```
+
+Now, clean up these data frames
+
+```{r}
+#rownames to column
+aqPHR95.2 <- tibble::rownames_to_column(as.data.frame(aqPHR95), "id1")
+ivPHR95.2 <- tibble::rownames_to_column(as.data.frame(ivPHR95), "id1")
+
+#convert to long format
+aqPHR95.l <- pivot_longer(aqPHR95.2, cols = c(2:ncol(aqPHR95.2)), names_to = "id2", values_to = "PHR95")
+aqPHR95.l$Site <- "AQ"
+
+ivPHR95.l <- pivot_longer(ivPHR95.2, cols = c(2:ncol(ivPHR95.2)), names_to = "id2", values_to = "PHR95")
+ivPHR95.l$Site <- "IV"
+
+PHR95overlap <- as.data.frame(rbind(aqPHR95.l, ivPHR95.l))
+
+PHR95overlap2 <- subset(PHR95overlap, (id1 != id2)) %>% #remove overlap estimates of each individual w/itself (all ~1; removes 170)
+  left_join(id1.sl.har) %>% #this adds the body size and harem size for each fish
+  left_join(id2.sl.har) #this adds the body size and harem size for each fish
+
+PHR95ovlp <- PHR95overlap2 %>% 
+  separate(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>%
+  separate(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
+  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column for the time between tracks
+  mutate(diff.sl = abs(SL1 - SL2))
+```
+
+Core areas
+
+```{r}
+aqPHR50 <- kerneloverlaphr(aqud, method = "PHR", conditional = T, percent = 50)
+ivPHR50 <- kerneloverlaphr(ivud, method = "PHR", conditional = T, percent = 50)
+```
+
+Now, let's clean up these dataframes
+
+```{r}
+#rownames to column
+aqPHR50.2 <- tibble::rownames_to_column(as.data.frame(aqPHR50), "id1")
+ivPHR50.2 <- tibble::rownames_to_column(as.data.frame(ivPHR50), "id1")
+
+#convert to long format
+aqPHR50.l <- pivot_longer(aqPHR50.2, cols = c(2:ncol(aqPHR50.2)), names_to = "id2", values_to = "PHR50")
+aqPHR50.l$Site <- "AQ"
+
+ivPHR50.l <- pivot_longer(ivPHR50.2, cols = c(2:ncol(ivPHR50.2)), names_to = "id2", values_to = "PHR50")
+ivPHR50.l$Site <- "IV"
+
+PHR50overlap <- as.data.frame(rbind(aqPHR50.l, ivPHR50.l))
+
+PHR50overlap2 <- subset(PHR50overlap, (id1 != id2)) %>% #remove overlap estimates of each individual w/itself (all ~1; removes 170)
+  left_join(id1.sl.har) %>% #this adds the body size and harem size for each fish
+  left_join(id2.sl.har) #this adds the body size and harem size for each fish
+
+PHR50ovlp <- PHR50overlap2 %>% 
+  separate(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>%
+  separate(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
+  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column for the time between tracks
+  mutate(diff.sl = abs(SL1 - SL2))
+```
+
+Merge overlaps
+
+```{r}
+PHR.overlaps <- neighboring %>%
+  left_join(PHR95ovlp) %>%
+  left_join(PHR50ovlp) %>%
+  unite("Interaction", c("Species1", "Species2"), sep = "-", remove = F) %>%
+  relocate(Interaction, .before = id1) %>%
+  relocate(PHR95, .before = PHR50) %>%
+  relocate(BA95, .before = PHR95)
+
+PHR.overlaps.sum <- PHR.overlaps %>%
+  group_by(Interaction) %>%
+  summarise(N = n(),
+            PHR95.o = sum(PHR95 > 0),
+            PHR95.no = sum(PHR95 == 0),
+            PHR50.o = sum(PHR50 > 0),
+            PHR50.no = sum(PHR50 == 0),
+            PHR95.o.perc = PHR95.o/N,
+            PHR50.o.perc = PHR50.o/N)
+
+sum(PHR.overlaps.sum$N) #1076, good
+mean(PHR.overlaps.sum$PHR95.o.perc) #77%
+range(PHR.overlaps.sum$PHR95.o.perc) #63-83% (Sc. taeniopterus - Sc. taeniopterus; Sp. aurofrenatum - Sp. aurofrenatum)
+
+mean(PHR.overlaps.sum$PHR50.o.perc) #27%
+range(PHR.overlaps.sum$PHR50.o.perc) #0-43% (Sp. viride - Sp. viride; Sp. aurofrenatum - Sc. vetula)
+```
+
+
+#Analysis of PHR for home ranges and core areas
+
+```{r}
+full.PHR95.nv <- glmmTMB(PHR95 ~ Site1 + Interaction + days + (1|id1),
+                        family = beta_family(link = "logit"),
+                        ziformula = ~ Site1 + Interaction + days,
+                        data = PHR.overlaps)
+
+full.PHR95.nv.r <- glmmTMB(PHR95 ~ Interaction + (1|id1),
+                        family = beta_family(link = "logit"),
+                        ziformula = ~ Interaction,
+                        data = PHR.overlaps)
+
+AICc(full.PHR95.nv, full.PHR95.nv.r) 
+# No difference in fit, so I will use reduced model 
+#                 df     AICc
+# full.PHR95.nv   38 147.4293
+# full.PHR95.nv.r 34 147.4811
+
+full.PHR95.v <- glmmTMB(PHR95 ~ Interaction + (1|id1),
+                        family = beta_family(link = "logit"),
+                        ziformula = ~ Interaction,
+                        dispformula = ~ Interaction,
+                        data = PHR.overlaps)
+
+AICc(full.PHR95.nv.r, full.PHR95.v) 
+# Variable fits better
+#                 df      AICc
+# full.PHR95.nv.r 34 147.48108
+# full.PHR95.v    49  19.27427
+
+test.PHR95 <- simulateResiduals(fittedModel = full.PHR95.v, n = 250, plot = T) #looks good
+testZeroInflation(test.PHR95) #looks good
+testDispersion(test.PHR95) #meets dispersion assumptions
+testOutliers(test.PHR95)
+
+summary(full.PHR95.v)
+options(contrasts = c("contr.sum", "contr.poly"))
+Anova(full.PHR95.v, type = 3)
+
+
+full.PHR95.mm.resp <- emmeans(full.PHR95.v, ~Interaction, component = "cond", type = "response")
+full.PHR95.mm.resp
+
+PHR95.resp.p <- plot(full.PHR95.mm.resp, color = c("black", "#A50F15"), comparisons = T) + theme_classic() +  
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa","Spv-Spv")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+PHR95.resp.p
+
+
+full.PHR95.mm.zi <- emmeans(full.PHR95.v, ~Interaction, component = "zi", type = "response") 
+full.PHR95.mm.zi
+
+PHR95.zi.p <- plot(full.PHR95.mm.zi, color = c("black", "#A50F15"), comparisons = T) + theme_classic() +  
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa","Spv-Spv")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+PHR95.zi.p
+
+
+full.PHR95.mm.disp <- emmeans(full.PHR95.v, ~Interaction, component = "disp", type = "response")
+full.PHR95.mm.disp
+
+
+PHR95.disp.p <- plot(full.PHR95.mm.disp, color = c("black", "#A50F15"), comparisons = T) + theme_classic() + 
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa","Spv-Spv")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+PHR95.disp.p
+
+
+PHR95.emm.p <- ggarrange(PHR95.resp.p, PHR95.zi.p + rremove("ylab"), PHR95.disp.p + rremove("ylab"),
+                     labels = c("a ", "b ", "c "),
+                     ncol = 3, nrow = 1, align = "h",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+PHR95.emm.p
+
+ggsave("Figures/PHR95_model.png", plot = PHR95.emm.p,
+       width = 6.5, height = 4, dpi = 300)
+```
+Family: beta  ( logit )
+Formula:          PHR95 ~ Interaction + (1 | id1)
+Zero inflation:         ~Interaction
+Dispersion:             ~Interaction
+Data: PHR.overlaps
+
+     AIC      BIC   logLik deviance df.resid 
+    14.5    258.6     41.8    -83.5     1027 
+
+Random effects:
+
+Conditional model:
+ Groups Name        Variance  Std.Dev. 
+ id1    (Intercept) 6.938e-10 2.634e-05
+Number of obs: 1076, groups:  id1, 86
+
+Conditional model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)   -1.51620    0.04415  -34.34  < 2e-16 ***
+Interaction1  -0.22465    0.12235   -1.84 0.066338 .  
+Interaction2  -0.19305    0.13961   -1.38 0.166750    
+Interaction3   0.09750    0.13836    0.70 0.481021    
+Interaction4  -0.35793    0.15405   -2.32 0.020152 *  
+Interaction5   1.00493    0.14992    6.70 2.04e-11 ***
+Interaction6  -1.76917    0.21294   -8.31  < 2e-16 ***
+Interaction7   0.70121    0.16688    4.20 2.65e-05 ***
+Interaction8   0.24362    0.20407    1.19 0.232554    
+Interaction9   0.93283    0.14134    6.60 4.11e-11 ***
+Interaction10  0.24684    0.16220    1.52 0.128054    
+Interaction11 -1.02479    0.16534   -6.20 5.72e-10 ***
+Interaction12  0.10359    0.17570    0.59 0.555485    
+Interaction13  0.87607    0.15475    5.66 1.50e-08 ***
+Interaction14  0.34376    0.19862    1.73 0.083498 .  
+Interaction15  0.59826    0.17852    3.35 0.000805 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Zero-inflation model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)   -1.22975    0.07851 -15.664  < 2e-16 ***
+Interaction1   0.68321    0.19381   3.525 0.000423 ***
+Interaction2  -0.03876    0.26162  -0.148 0.882235    
+Interaction3  -0.03591    0.23907  -0.150 0.880596    
+Interaction4  -0.03138    0.26873  -0.117 0.907052    
+Interaction5  -0.03876    0.26162  -0.148 0.882231    
+Interaction6   0.53661    0.31609   1.698 0.089576 .  
+Interaction7  -0.11002    0.32641  -0.337 0.736071    
+Interaction8   0.04413    0.33168   0.133 0.894153    
+Interaction9  -0.03591    0.23907  -0.150 0.880595    
+Interaction10 -0.11002    0.32641  -0.337 0.736069    
+Interaction11 -0.37968    0.33341  -1.139 0.254794    
+Interaction12 -0.35721    0.35110  -1.017 0.308963    
+Interaction13 -0.03138    0.26873  -0.117 0.907054    
+Interaction14  0.04413    0.33168   0.133 0.894153    
+Interaction15 -0.35721    0.35110  -1.017 0.308963    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Dispersion model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)    1.31243    0.05312  24.706  < 2e-16 ***
+Interaction1   0.45593    0.16421   2.777 0.005494 ** 
+Interaction2   0.27303    0.17835   1.531 0.125812    
+Interaction3  -0.22672    0.15898  -1.426 0.153855    
+Interaction4   0.23015    0.18954   1.214 0.224663    
+Interaction5  -0.91826    0.14853  -6.182 6.32e-10 ***
+Interaction6   1.66705    0.29390   5.672 1.41e-08 ***
+Interaction7  -0.37653    0.19214  -1.960 0.050035 .  
+Interaction8  -0.46251    0.22177  -2.086 0.037017 *  
+Interaction9  -1.03593    0.13653  -7.588 3.26e-14 ***
+Interaction10  0.03184    0.20495   0.155 0.876538    
+Interaction11  0.89758    0.21722   4.132 3.59e-05 ***
+Interaction12 -0.15522    0.20573  -0.754 0.450556    
+Interaction13 -0.84655    0.15594  -5.429 5.68e-08 ***
+Interaction14 -0.45941    0.21743  -2.113 0.034608 *  
+Interaction15 -0.63217    0.18886  -3.347 0.000816 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+Response: PHR95
+              Chisq Df Pr(>Chisq)    
+(Intercept) 1179.50  1  < 2.2e-16 ***
+Interaction  296.44 15  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+PWPP plots for visual analysis
+
+```{r}
+PHR95.resp.pwpp <- pwpp(full.PHR95.mm.resp, sort = F, values = T, aes = my.aes) + 
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa","Spv-Spv")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+PHR95.resp.pwpp
+
+
+PHR95.zi.pwpp <- pwpp(full.PHR95.mm.zi, sort = F, values = T, aes = my.aes) + 
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa","Spv-Spv")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+PHR95.zi.pwpp
+
+
+PHR95.disp.pwpp <- pwpp(full.PHR95.mm.disp, sort = F, values = T, aes = my.aes) +
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa","Spv-Spv")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+PHR95.disp.pwpp
+
+
+PHR95.emm.pwpp <- ggarrange(PHR95.resp.pwpp + rremove("xlab") + rremove("ylab"), 
+                            PHR95.zi.pwpp + rremove("xlab"), 
+                            PHR95.disp.pwpp + rremove("ylab"),
+                     labels = c("a ", "b ", "c "),
+                     ncol = 1, nrow = 3, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+PHR95.emm.pwpp
+
+ggsave("Figures/PHR95_model_pwpp.png", plot = PHR95.emm.pwpp,
+       width = 6.5, height = 8, dpi = 300)
+```
+
+
+PHR50 Activity
+
+Remove the Spviride - Spviride Interactions because they are all zero and the model won't run if a category has all zeros.
+
+```{r}
+PHR.overlaps.r <- PHR.overlaps %>%
+  filter(Interaction != "Spviride-Spviride")
+
+
+full.PHR50.nv <- glmmTMB(PHR50 ~ Site1 + Interaction + days + (1|id1),
+                        family = beta_family(link = "logit"),
+                        ziformula = ~ Site1 + Interaction + days,
+                        data = PHR.overlaps.r)
+
+full.PHR50.nv.r <- glmmTMB(PHR50 ~ Interaction + (1|id1),
+                        family = beta_family(link = "logit"),
+                        ziformula = ~ Interaction,
+                        data = PHR.overlaps.r)
+
+AICc(full.PHR50.nv, full.PHR50.nv.r) 
+# Reduced model fits best
+#                 df     AICc
+# full.PHR50.nv   36 400.4963
+# full.PHR50.nv.r 32 395.1777
+
+full.PHR50.v <- glmmTMB(PHR50 ~ Interaction + (1|id1), 
+                        dispformula = ~ Interaction,
+                        family = beta_family(link = "logit"),
+                        ziformula = ~ Interaction,
+                        data = PHR.overlaps.r)
+
+AICc(full.PHR50.nv.r, full.PHR50.v) 
+# Variable fits best
+#                 df     AICc
+# full.PHR50.nv.r 32 395.1777
+# full.PHR50.v    46 383.1780
+
+test.PHR50 <- simulateResiduals(fittedModel = full.PHR50.v, n = 250, plot = T) #Looks good
+testZeroInflation(test.PHR50) #looks good
+testDispersion(test.PHR50) #meets dispersion assumptions
+testOutliers(test.PHR50) #no sig. outliers
+
+summary(full.PHR50.v)
+options(contrasts = c("contr.sum", "contr.poly"))
+Anova(full.PHR50.v, type = 3)
+
+
+full.PHR50.mm.resp <- emmeans(full.PHR50.v, ~Interaction, component = "cond", type = "response") 
+full.PHR50.mm.resp
+
+PHR50.resp.p <- plot(full.PHR50.mm.resp, color = c("black", "#6A3D9A"), comparisons = T) + theme_classic() +  
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+PHR50.resp.p
+
+
+full.PHR50.mm.zi <- emmeans(full.PHR50.v, ~Interaction, component = "zi", type = "response")
+full.PHR50.mm.zi
+
+PHR50.zi.p <- plot(full.PHR50.mm.zi, color = c("black", "#6A3D9A"), comparisons = T) + theme_classic() +
+    scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black"))
+PHR50.zi.p
+
+# Warning messages:
+# 1: Comparison discrepancy in group "1", (Sctaeniopterus-Sctaeniopterus) - (Sctaeniopterus-Spviride):
+#     Target overlap = -1e-04, overlap on graph = 5e-04 
+# 2: Comparison discrepancy in group "1", (Sctaeniopterus-Sctaeniopterus) - (Spviride-Sctaeniopterus):
+#     Target overlap = -1e-04, overlap on graph = 5e-04
+
+
+full.PHR50.mm.disp <- emmeans(full.PHR50.v, ~Interaction, component = "disp", type = "response")
+full.PHR50.mm.disp
+
+PHR50.disp.p <- plot(full.PHR50.mm.disp, color = c("black", "#6A3D9A"), comparisons = T) + theme_classic() +  
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa")) +
+  labs(x = "Response", y = "Interaction Type") +
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) +
+  scale_x_continuous(limits = c(0, 275)) +
+  annotate("text", x=135, y=6, label= "R=2093.8, CI=523.1-8380.0", size = 2.8) #this one made it difficult to see others
+PHR50.disp.p
+
+
+PHR50.emm.p <- ggarrange(PHR50.resp.p, PHR50.zi.p + rremove("ylab"), PHR50.disp.p + rremove("ylab"),
+                     labels = c("a ", "b ", "c "),
+                     ncol = 3, nrow = 1, align = "h",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+PHR50.emm.p
+
+ggsave("Figures/PHR50_model.png", plot = PHR50.emm.p,
+       width = 6.5, height = 4, dpi = 300)
+```
+Family: beta  ( logit )
+Formula:          PHR50 ~ Interaction + (1 | id1)
+Zero inflation:         ~Interaction
+Dispersion:             ~Interaction
+Data: PHR.overlaps.r
+
+     AIC      BIC   logLik deviance df.resid 
+   378.8    606.7   -143.4    286.8     1000 
+
+Random effects:
+
+Conditional model:
+ Groups Name        Variance  Std.Dev. 
+ id1    (Intercept) 1.535e-10 1.239e-05
+Number of obs: 1046, groups:  id1, 86
+
+Conditional model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)   -2.45660    0.05460  -44.99  < 2e-16 ***
+Interaction1  -0.96278    0.16712   -5.76 8.36e-09 ***
+Interaction2  -0.21339    0.17266   -1.24   0.2165    
+Interaction3  -0.00119    0.15147   -0.01   0.9937    
+Interaction4  -0.26479    0.23676   -1.12   0.2634    
+Interaction5   0.89362    0.16369    5.46 4.78e-08 ***
+Interaction6  -0.77826    0.07629  -10.20  < 2e-16 ***
+Interaction7  -0.09584    0.20115   -0.48   0.6338    
+Interaction8   0.13802    0.22109    0.62   0.5324    
+Interaction9   0.83109    0.14620    5.68 1.31e-08 ***
+Interaction10 -0.49871    0.19486   -2.56   0.0105 *  
+Interaction11  0.13807    0.33141    0.42   0.6770    
+Interaction12 -0.06253    0.21899   -0.29   0.7752    
+Interaction13  0.54622    0.21750    2.51   0.0120 *  
+Interaction14  0.07975    0.23208    0.34   0.7311    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Zero-inflation model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)    1.00700    0.07955  12.659  < 2e-16 ***
+Interaction1   1.39089    0.31761   4.379 1.19e-05 ***
+Interaction2  -0.29551    0.23278  -1.269  0.20427    
+Interaction3  -0.34371    0.21201  -1.621  0.10498    
+Interaction4  -0.02617    0.25115  -0.104  0.91700    
+Interaction5  -0.29551    0.23278  -1.269  0.20426    
+Interaction6   1.24429    0.49578   2.510  0.01208 *  
+Interaction7  -0.74130    0.27000  -2.746  0.00604 ** 
+Interaction8  -0.24932    0.30198  -0.826  0.40902    
+Interaction9  -0.34371    0.21201  -1.621  0.10498    
+Interaction10 -0.74130    0.27000  -2.746  0.00604 ** 
+Interaction11  1.19022    0.40844   2.914  0.00357 ** 
+Interaction12 -0.25670    0.28528  -0.900  0.36822    
+Interaction13 -0.02617    0.25115  -0.104  0.91700    
+Interaction14 -0.24932    0.30198  -0.826  0.40902    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Dispersion model:
+              Estimate Std. Error z value Pr(>|z|)    
+(Intercept)    3.05391    0.10159  30.060  < 2e-16 ***
+Interaction1   1.66627    0.43702   3.813 0.000137 ***
+Interaction2  -0.12450    0.28733  -0.433 0.664811    
+Interaction3  -0.24826    0.25726  -0.965 0.334552    
+Interaction4  -0.53802    0.33649  -1.599 0.109839    
+Interaction5  -0.93336    0.27135  -3.440 0.000583 ***
+Interaction6   4.59281    0.66653   6.891 5.56e-12 ***
+Interaction7  -0.41830    0.31152  -1.343 0.179348    
+Interaction8  -0.38744    0.36830  -1.052 0.292821    
+Interaction9  -0.85493    0.24696  -3.462 0.000537 ***
+Interaction10  0.03102    0.31389   0.099 0.921266    
+Interaction11 -0.31107    0.56648  -0.549 0.582915    
+Interaction12 -0.31998    0.35315  -0.906 0.364899    
+Interaction13 -1.07924    0.31459  -3.431 0.000602 ***
+Interaction14 -0.44668    0.37179  -1.201 0.229585    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+
+Response: PHR50
+              Chisq Df Pr(>Chisq)    
+(Intercept) 2024.09  1  < 2.2e-16 ***
+Interaction  231.68 14  < 2.2e-16 ***
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+ 
+ 
+PWPP plots for visual analysis
+
+```{r}
+PHR50.resp.pwpp <- pwpp(full.PHR50.mm.resp, sort = F, values = T, aes = my.aes) + 
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+PHR50.resp.pwpp
+
+
+PHR50.zi.pwpp <- pwpp(full.PHR50.mm.zi, sort = F, values = T, aes = my.aes) + 
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+PHR50.zi.pwpp
+
+
+PHR50.disp.pwpp <- pwpp(full.PHR50.mm.disp, sort = F, values = T, aes = my.aes) +
+  theme_classic() +   
+  scale_color_manual(values = wes.pal)+
+  theme(axis.text = element_text(family = "Arial", size = 10, color = "black"),
+        axis.text.y = element_text(face = "italic"),
+        axis.title = element_text(family = "Arial", size = 10, color = "black")) + 
+  theme(panel.grid.major.y = element_line(),
+        panel.grid.minor.y = element_line()) +
+  scale_y_discrete(labels = c("Sct-Sct","Sct-Scv","Sct-Spa","Sct-Spv",
+                              "Scv-Sct","Scv-Scv","Scv-Spa","Scv-Spv",
+                              "Spa-Sct","Spa-Scv","Spa-Spa","Spa-Spv",
+                              "Spv-Sct","Spv-Scv", "Spv-Spa")) +
+  labs(x = expression(paste("Tukey-adjusted ", italic("p"), "-value")))
+PHR50.disp.pwpp
+
+
+PHR50.emm.pwpp <- ggarrange(PHR50.resp.pwpp + rremove("xlab") + rremove("ylab"), 
+                            PHR50.zi.pwpp + rremove("xlab"), 
+                            PHR50.disp.pwpp + rremove("ylab"),
+                     labels = c("a ", "b ", "c "),
+                     ncol = 1, nrow = 3, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+PHR50.emm.pwpp
+
+ggsave("Figures/PHR50_model_pwpp.png", plot = PHR50.emm.pwpp,
+       width = 6.5, height = 8, dpi = 300)
+```
+
+
+#Summarize and plot results, plot conditionally (no zeros, but show the percentage of pairs with overlaps)
+
+```{r}
+TPTP.PHR.props <- PHR.overlaps %>%
+  group_by(Interaction) %>%
+  summarise(N = n(),
+            PHR95.pno = 100 - ((sum(PHR95 > 0)/N)*100),
+            PHR50.pno = 100 - ((sum(PHR50 > 0)/N)*100)) %>%
+  mutate(across(PHR95.pno:PHR50.pno, round, 1)) %>%
+  mutate("PropNoActivityHR" = sprintf("%.1f", PHR95.pno),
+         "PropNoActivityCA" = sprintf("%.1f", PHR50.pno)) %>%
+  separate(Interaction, c("Species1", "Species2"), sep = "-") %>%
+  select(-c(PHR95.pno, PHR50.pno))
+
+TPTP.PHR.props$Species1 <- sub("(^..)", "\\1.", TPTP.PHR.props$Species1)
+TPTP.PHR.props$Species2 <- sub("(^..)", "\\1.", TPTP.PHR.props$Species2)
+TPTP.PHR.props
+
+
+TPTP.PHR95.sum <- PHR.overlaps %>%
+  group_by(Interaction) %>%
+  filter(PHR95 > 0) %>%
+  summarise(N = n(),
+            mPHR95 = mean(PHR95),
+            sePHR95 = sd(PHR95)/sqrt(N)) %>%
+  mutate(across(mPHR95:sePHR95, round, 2)) %>%
+  mutate("PHR95" = sprintf("%.2f\u00B1%.2f", mPHR95, sePHR95)) %>%
+  separate(Interaction, c("Species1", "Species2"), sep = "-") %>%
+  select(-N)
+
+TPTP.PHR95.sum$Species1 <- sub("(^..)", "\\1.", TPTP.PHR95.sum$Species1)
+TPTP.PHR95.sum$Species2 <- sub("(^..)", "\\1.", TPTP.PHR95.sum$Species2)
+TPTP.PHR95.sum
+
+
+TPTP.PHR50.sum <- PHR.overlaps %>%
+  group_by(Interaction) %>%
+  filter(PHR50 > 0) %>%
+  summarise(N = n(),
+            mPHR50 = mean(PHR50),
+            sePHR50 = sd(PHR50)/sqrt(N)) %>%
+  mutate(across(mPHR50:sePHR50, round, 2)) %>%
+  mutate("PHR50" = sprintf("%.2f\u00B1%.2f", mPHR50, sePHR50)) %>%
+  separate(Interaction, c("Species1", "Species2"), sep = "-") %>% 
+  select(-N)
+
+TPTP.PHR50.sum$Species1 <- sub("(^..)", "\\1.", TPTP.PHR50.sum$Species1)
+TPTP.PHR50.sum$Species2 <- sub("(^..)", "\\1.", TPTP.PHR50.sum$Species2)
+TPTP.PHR50.sum
+
+
+TPTP.PHR.sum <- TPTP.PHR.props %>%
+  full_join(TPTP.PHR95.sum) %>%
+  full_join(TPTP.PHR50.sum)
+  
+display.brewer.pal(12, "Reds")
+brewer.pal(12, "Reds") #use A50F15 for PHR95
+
+PHR95.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mPHR95), parse = F) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "white", high = "#A50F15", limit = c(0,0.41), 
+                       space = "Lab", name="Activity of 2\nin HR 1", label = function(x) sprintf("%.2f", x)) +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, size = 10, face = "italic", color = "black", 
+                                   hjust = 1, vjust = 0.5, family = "Arial"),
+       axis.text.y = element_text(size = 10, face = "italic", color = "black", vjust = 0.5, family = "Arial"),
+       axis.ticks = element_blank()) + 
+  coord_fixed() +
+  geom_text(aes(label = `PHR95`, family = "Arial"), vjust = -1, size = 2.5) +
+  geom_text(aes(label = `PropNoActivityHR`, family = "Arial"), vjust = -1, size = 2.5, nudge_y = -0.25) +
+  labs(x = "Species 2", y = "Species 1") +
+  scale_x_discrete(labels=c("Spv", "Spa", "Scv", "Sct")) +
+  scale_y_discrete(labels=c("Sct", "Scv", "Spa", "Spv")) 
+PHR95.hm
+
+PHR50.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mPHR50), parse = F) +
+  geom_tile(color = "white") +
+  scale_fill_gradient2(low = "white", high = "#6A3D9A", na.value = "white", limit = c(0,0.21), 
+                       space = "Lab", name="Activity of 2\nin CA 1") +
+  theme_classic() + 
+  theme(axis.text.x = element_text(angle = 90, size = 10, face = "italic", color = "black", 
+                                   hjust = 1, vjust = 0.5, family = "Arial"),
+       axis.text.y = element_text(size = 10, face = "italic", color = "black", vjust = 0.5, family = "Arial"),
+       axis.ticks = element_blank()) + 
+  coord_fixed() +
+  geom_text(aes(label = `PHR50`, family = "Arial"), vjust = -1, size = 2.5) +
+  geom_text(aes(label = `PropNoActivityCA`, family = "Arial"), vjust = -1, size = 2.5, nudge_y = -0.25) +
+  labs(x = "Species 2", y = "Species 1") +
+  scale_x_discrete(labels=c("Spv", "Spa", "Scv", "Sct")) +
+  scale_y_discrete(labels=c("Sct", "Scv", "Spa", "Spv")) 
+PHR50.hm
+```
+
+
+#Plot all overlaps
+
+```{r}
+overlaps.p <- ggarrange(BA95.hm, PHR95.hm, PHR50.hm,
+                     ncol = 1, nrow = 3, align = "v",
+                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
+overlaps.p
+
+ggsave("Figures/Fig3.png", plot = overlaps.p,
+       width = 4.5, height = 8, dpi = 400)
+```
+
+
+
+
+##Summarise and analyze spatial overlaps for Intraspecific TP-IP interactions (using Bhattacharyya's Affinity)
+
+```{r}
+TPIPovlp <- ovlp %>%
+  filter(!grepl("2021-05-", Date1) & !grepl("2021-05-", Date2)) %>% #remove Sp. viride prior to June
+  filter(Species1 != "Scguacamaia" & Species2 != "Scguacamaia") %>% #remove Sc. guacamaia
+  filter(Species1 != "Sciseri" & Species2 != "Sciseri") %>% #remove Sc. iseri
+  filter(Phase1 != "NTP" & Phase2 != "NTP") %>% #remove all non-territorial terminal phase which are treated elsewhere
+  filter(Phase1 != Phase2) %>% #Want TP - IP interactions only
+  filter(Species1 == Species2) %>% #intraspecific
+  unite("Interaction", c("Species1", "Species2"), sep = " - ", remove = F) %>%
+  unite("IPid", c("Site1", "Species1", "Phase1", "Date1", "EndTime1")) %>%
+  group_by(IPid) %>%
+  slice(which.max(BA95)) %>%
+  ungroup() %>%
+  separate(IPid, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_") %>%
+  select(!c(SL1:HAR2, diff.sl))
+
+#Create a data set including the reciprocal IDs for each pair so that the PHR overlaps can be merged with it. 
+
+iptp.ovlp <- TPIPovlp %>%
+  unite(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_") %>%
+  unite(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_") %>%
+  select(-Interaction)
+
+tpip.ovlp <- TPIPovlp %>%
+  unite(id2, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_") %>%
+  unite(id1, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_") %>%
+  select(-Interaction) %>%
+  relocate(id1, .before = id2)
+
+TPIPovlp2 <- rbind(iptp.ovlp, tpip.ovlp) %>%
+  left_join(PHR95ovlp) %>%
+  left_join(PHR50ovlp) %>%
+  select(-c(Site:diff.sl)) %>%
+  unite(Interaction, c("Species1", "Phase1", "Phase2"), sep = "-", remove = F)
+  
+
+#Summarize for plotting and tables
+
+#For each species
+TPIPovlp.sum <- TPIPovlp %>%
+  group_by(Species1) %>%
+  summarise(N = n(),
+            mBA = mean(BA95),
+            BAse = sd(BA95)/sqrt(N)) %>%
+  mutate(across(mBA:BAse, round, 2)) %>% 
+  unite("Spatial Overlap (BA)", mBA:BAse, sep = " \u00B1 ", remove = F)
+TPIPovlp.sum
+
+write.table(TPIPovlp.sum, file = "DataSummary/TPIPoverlap.txt", 
+            sep = ",", quote = FALSE, row.names = F)
+
+#Irrespective of species
+TPIPovlp.sum2 <- TPIPovlp %>%
+  summarise(N = n(),
+            mBA = mean(BA95),
+            BAse = sd(BA95)/sqrt(N)) %>%
+  mutate(across(mBA:BAse, round, 2))
+TPIPovlp.sum2
+```
+
+Across all species, TP and IP share substantial space (0.52 +- 0.03). 
+
+      N   mBA  BAse
+  <int> <dbl> <dbl>
+1    41  0.52  0.03
+
+
+Analyses
+
+```{r}
+harem.BA95.nv <- glmmTMB(BA95 ~ Site1 + Species1 + days,
+                         family = beta_family(link = "logit"),
+                         data = TPIPovlp)
+
+harem.BA95.nv.r <- glmmTMB(BA95 ~ Species1,
+                           family = beta_family(link = "logit"),
+                           data = TPIPovlp)
+
+AICc(harem.BA95.nv, harem.BA95.nv.r) 
+# Reduced is a better fit
+#                 df      AICc
+# harem.BA95.nv    7 -5.290049
+# harem.BA95.nv.r  5 -7.434709
+
+
+harem.BA95.v <- glmmTMB(BA95 ~ Species1,
+                        dispformula = ~ Species1,
+                        family = beta_family(link = "logit"),
+                        data = TPIPovlp)
+
+AICc(harem.BA95.nv.r, harem.BA95.v) 
+# Variable fits worse, so stick with fixed dispersion
+#                 df      AICc
+# harem.BA95.nv.r  5 -7.434709
+# harem.BA95.v     8 -1.361314
+
+test.harem.BA95 <- simulateResiduals(fittedModel = harem.BA95.nv.r, n = 250, plot = T) #looks good
+testZeroInflation(test.harem.BA95) #looks good
+plotResiduals(test.harem.BA95) #looks good
+testDispersion(test.harem.BA95) #meets dispersion assumptions
+testOutliers(test.harem.BA95)
+
+summary(harem.BA95.nv.r)
+options(contrasts = c("contr.sum", "contr.poly"))
+Anova(harem.BA95.nv.r, type = 3)
+
+
+TPIP.SO.p <- ggplot(TPIPovlp.sum, aes(x=Species1, y=mBA, fill=Species1)) + 
+  geom_col(position = position_dodge2(width = 0.9, preserve = "single"), color = "black") +
+  geom_errorbar(aes(ymin = mBA - BAse, ymax = mBA + BAse, group=Species1), width = 0)+
+  theme_classic(base_family = "Arial") +
+  labs(y = "Spatial Overlap of Haremic\nTP and IP Home Ranges") +
+  theme(strip.background = element_blank(),
+        strip.text.x = element_text(size = 12, color = "black"), 
+        legend.position = "none",
+        axis.title = element_text(size=12),
+        axis.text.x = element_text(size=10, color = "black", face = "italic", angle = 90, hjust = 1, vjust = 0.25),
+        axis.text.y = element_text(size=10, color = "black"),
+        plot.title = element_text(hjust = 0.5),
+        axis.title.x = element_blank()) +
+  scale_fill_manual(values = sp.color.all[2:5])
+TPIP.SO.p
+
+ggsave("Figures/FigS8.png", plot = TPIP.SO.p,
+       width = 4, height = 4, dpi = 300)
+```
+Family: beta  ( logit )
+Formula:          BA95 ~ Species1
+Data: TPIPovlp
+
+     AIC      BIC   logLik deviance df.resid 
+    -9.1     -0.6      9.6    -19.1       36 
+
+
+Dispersion parameter for beta family (): 5.34 
+
+Conditional model:
+            Estimate Std. Error z value Pr(>|z|)
+(Intercept)  0.07232    0.12342   0.586    0.558
+Species11    0.08144    0.21512   0.379    0.705
+Species12   -0.08947    0.20822  -0.430    0.667
+Species13    0.28087    0.21646   1.298    0.194
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+
+Response: BA95
+             Chisq Df Pr(>Chisq)
+(Intercept) 0.3434  1     0.5579
+Species1    2.6853  3     0.4427
+
+
+Plotting PHR overlaps as well, but not including this analysis anywhere.
+
+```{r eval = F}
+TPIPovlp2.sum <- TPIPovlp2 %>%
+  group_by(Interaction, Species1, Phase1) %>%
+  summarise(N = n(),
+            mPHR95 = mean(PHR95),
+            PHR95se = sd(PHR95)/sqrt(N),
+            mPHR50 = mean(PHR50),
+            PHR50se = sd(PHR50)/sqrt(N)) %>%
+  mutate(across(mPHR95:PHR50se, round, 2)) %>%
+  mutate("PHR95" = sprintf("%.2f\u00B1%.2f", mPHR95, PHR95se)) %>%
+  mutate("PHR50" = sprintf("%.2f\u00B1%.2f", mPHR50, PHR50se))
+TPIPovlp2.sum
+
+
+TPIP.PHR95.p <- ggplot(TPIPovlp2.sum, aes(x=Species1, y=mPHR95, fill=Species1)) + 
+  geom_col(aes(alpha = Phase1), position = position_dodge2(width = 0.9, preserve = "single"), size = 0.5, color = "black") +
+  geom_errorbar(aes(ymin = mPHR95 - PHR95se, ymax = mPHR95 + PHR95se, group=Phase1), width = 0, position = position_dodge(0.9), size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  labs(x = "Species", y = "Probability of Activity in HR") +
+  theme(strip.background = element_blank(),
+        strip.text.x = element_text(size = 12, color = "black"), 
+        legend.position = "none",
+        axis.title = element_text(size=12),
+        axis.text.x = element_text(size=10, color = "black", face = "italic", angle = 90, hjust = 1, vjust = 0.25),
+        axis.text.y = element_text(size=10, color = "black"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c(sct.color, scv.color, spa.color, spv.color)) +
+  scale_alpha_discrete(range = c(1, 0.5)) +
+  scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
+TPIP.PHR95.p
+
+# ggsave("Figures/FigSX2.png", plot = TPIP.PHR95.p,
+#        width = 4, height = 4, dpi = 300)
+
+TPIP.PHR50.p <- ggplot(TPIPovlp2.sum, aes(x=Species1, y=mPHR50, fill=Species1)) + 
+  geom_col(aes(alpha = Phase1), position = position_dodge2(width = 0.9, preserve = "single"), size = 0.5, color = "black") +
+  geom_errorbar(aes(ymin = mPHR50 - PHR50se, ymax = mPHR50 + PHR50se, group=Phase1), width = 0, position = position_dodge(0.9), size = 0.5) +
+  theme_classic(base_family = "Arial") +
+  labs(x = "Species", y = "Probability of Activity in HR") +
+  theme(strip.background = element_blank(),
+        strip.text.x = element_text(size = 12, color = "black"), 
+        legend.position = "none",
+        axis.title = element_text(size=12),
+        axis.text.x = element_text(size=10, color = "black", face = "italic", angle = 90, hjust = 1, vjust = 0.25),
+        axis.text.y = element_text(size=10, color = "black"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_fill_manual(values = c(sct.color, scv.color, spa.color, spv.color)) +
+  scale_alpha_discrete(range = c(1, 0.5)) +
+  scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
+TPIP.PHR50.p
+
+# ggsave("Figures/FigSX3.png", plot = TPIP.PHR50.p,
+#        width = 4, height = 4, dpi = 300)
+```
