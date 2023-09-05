@@ -1,0 +1,131 @@
+Date,Start,End,Site,Terr.Num,F.Species,F.Phase,F.Size,Harem,Int.Species,Int.Phase,Int.Type,Int.Size,Est.Size,Boundary,Interact,Preceed.Int,Preceed.Int.Phase,Duration,Chase,Charge.Display,Both,Mating,Duration.Exact,Comment
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,TP,Floater,Smaller,25,,Y,,,10.9,Y,Y,Y,,N,Started and stopped watch a couple times because the fish hesitated before chase
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,TP,Floater,Smaller,25.5,,Y,,,13.8,Y,Y,Y,,Y,
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,TP,Neighbor,,,N,N,,,,,,,,,Neighbor was feeding a few (~5-10) meters away with no interaction
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,TP,Neighbor,Similar,,,Y,,,8.04,Y,Y,Y,,Y,Approx. = sized
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,TP,Neighbor,Similar,,N,Y,,,17.75,Y,Y,Y,,Y,Approx. = sized
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,TP,Floater,Smaller,,N,Y,Y,TP,15.13,Y,Y,Y,,Y,Approx. 5 seconds after previous interaction (=size neighbor 17.75s). Likely that floater was chased into territory by N. neighbor
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,Y,,,1,N,Y,N,,Y,
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,Y,,,0.84,N,Y,N,,Y,
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,Y,,,1,N,Y,N,,Y,
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,N,,,9.71,Y,N,N,,Y,maybe just a follow to same spot… not aggressive
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,Y,,,1.84,Y,N,N,,Y,
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,Y,,,2.79,Y,Y,Y,,Y,
+7/4/2021,10:53,11:38,IV,1,Sp viride,TP,27,4,Sp viride,IP,,,,,Y,,,4.24,Y,Y,Y,,Y,
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Floater,Smaller,,,Y,,,16,Y,N,N,,N,Stopwatch did not stop the first time pushed.
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Neighbor,Similar,,S,N,,,,,,,,,S. Neighbor feeding ~10 m away and there were no interactions
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Floater,Smaller,24,N,Y,,,13.87,Y,N,N,,N,May be a little long (note in records)
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,,,,,N,,,,,,,,,TP swam near (few meters but focal didn't notice).
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Floater,Smaller,25.5,,Y,,,13.08,Y,Y,Y,,Y,Charge and then chase 25-26 cm floater
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Neighbor,Similar,,E,Y,Y,IP,7,Y,Y,Y,,N,After the focal chased an IP into another territory (~11s) the neighbor chased it back and they briefly displayed (~7s)
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,Both,Both,,,W,N,,,10.33,,,,,Y,Followed as equal sized neighbor chased smaller floater along deeper boundary
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Neighbor,Similar,,N,Y,Y,IP,2.69,N,Y,N,,Y,Slight display at passing N neighbor after returning from chasing an IP.
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Neighbor,Similar,,W,Y,,,9.43,N,Y,N,,Y,Display with deeper equal sized neighbor
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Neighbor,Similar,,S,N,,,,,,,,,Near S. neighbor with no interaction.
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Floater,Similar,,,Y,,,15.54,Y,N,N,,Y,"Slow chase, headed to the south, of a similarly sized floater."
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Floater,Smaller,,N,Y,,,11.47,Y,N,N,,Y,Chased smaller floater into N. neighbor territory
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,TP,Floater,,,,Y,,,28.08,Y,N,N,,Y,"Immediately after the prior floater chase, it chased another TP south (likely floater but not good view of size)"
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,IP,,,,,Y,,,2.3,N,Y,N,,Y,
+7/4/2021,11:55,12:40,IV,2,Sp viride,TP,27,2,Sp viride,IP,,,,,Y,,,11,Y,Y,Y,,N,Chased IP from territory and was then chased back by neighbor.
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,TP,Floater,Smaller,26,W,Y,,,36.5,Y,N,N,,Y,"Chased smaller floater starting at the deep boundary, headed north. Floater was covered in parasites and had mouth tumor looking thing. Fed in territory 4 after, but owner didn’t notice"
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,TP,Floater,Smaller,,,Y,,,19.9,Y,Y,Y,,N,Slow chase with pauses and displays at smaller TP Floater. Started and stopped timer a few times for brief pauses. The neighbor chased floater more aggressively after. 
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,TP,Floater,Smaller,26,,Y,,,8.93,Y,Y,Y,,Y,Chase and display with small floater (26cm same as first) 
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,TP,Neighbor,Smaller,28,N,Y,,,20.23,Y,Y,Y,,N,"Aggressive chase and display with what appeared to be the neighbor (T4). Not sure it was neighbor, but was feeding in the open in T4. Time may not be perfect b/c I returned as chase began from measuring last interaction but Krista said it was good."
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,IP,,,,,Y,,,4.38,N,Y,N,,Y,Charge
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,IP,,,,,Y,,,5.7,N,Y,N,,Y,Charge
+7/4/2021,14:04,14:49,IV,3,Sp viride,TP,29,4,Sp viride,IP,,,,,Y,,,0.5,N,Y,N,,Y,Charge with IP < 15cm
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Floater,Smaller,26.5,,Y,,,5.75,Y,Y,Y,,Y,Chase and display with smaller floater 
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Both,,,S,N,,,6.1,,,,,Y,Slowly followed as neighbor chased smaller TP by at the south boundary
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Floater,Smaller,,,Y,,,36.33,Y,N,N,,Y,Aggressive chase with smaller floater
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Floater,Smaller,24.5,,Y,,,24.4,Y,N,N,,Y,"Chase (not in notes, but recalled when inputing data on Rite n Rain) of likely floater"
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Floater,Smaller,,,Y,,,4,Y,Y,Y,,N,Chase and display at smaller floater (~4s)
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Neighbor,Similar,29,S,Y,Y,TP,13,N,Y,N,,N,"Displayed with neighbor (TP3) - neighbor displayed longer than focal, only timed the focal (~13s). This and the last chase and display at small floater (~4s) were essentially the same interaction and that is why both are approximations. "
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Floater,Smaller,24,,Y,,,24.64,Y,N,N,,Y,"Slow chase of small (24cm) likely floater (small, straying low, but not immediately chased again) "
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,TP,Neighbor,Similar,28,,Y,,,6.77,Y,Y,Y,,Y,Chase and display at 28cm neighbor
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,IP,,,,,Y,,,1.46,N,Y,N,,Y,Charge
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,IP,,,,,Y,,,1.88,N,Y,N,,Y,Charge
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,IP,,,,,Y,,,1.4,N,Y,N,,Y,Charge
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,IP,,,,,Y,,,13.03,Y,N,N,,Y,"Chase, possibly non-haremic (chased out of territory)"
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,IP,,,,,Y,,,3.89,N,Y,N,,Y,Charge and display
+7/4/2021,14:55,15:40,IV,4,Sp viride,TP,28,5,Sp viride,IP,,,,,Y,,,11.98,N,N,N,Y,Y,Mating
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Floater,Smaller,25,E,Y,,,23.3,Y,N,N,N,Y,Chase small 25cm (likely) floater along shallows.
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,S,N,,,,,,,,,"Neighbor may have displayed at focal near their boundary, but there was no reaction from focal"
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,29,W,N,,,,,,,,,Deeper neighbor (~29cm similar size) passed within 10 m; no interaction
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,S,N,,,,,,,,,South neighbor within 15 m with no interaction 
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,UNK,,,,,Y,,,9.1,N,Y,N,N,Y,Charged at something but unsure what it was. There was an IP nearby though.
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Floater,Smaller,,S,N,,,,,,,,,Another small floater within 10m but the focal didn't see (?) and there was no interaction.
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,N,N,,,,,,,,,"North neighbor was 20 m away, focal looked that way, but no interaction"
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Smaller,27,SE,Y,,,96.57,N,Y,N,N,Y,Smaller 27cm neighbor (?) charge and display back and forth.
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Floater,Smaller,,E,Y,,,37.79,Y,N,N,N,N,Very aggressive chase of smaller floater (?) northward along shallow O. annularis-gorgo zone boundary. ~34.79s but started watch ~3s late. Added that time to total.
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,W,Y,,,14.21,Y,Y,Y,N,Y,Chase and display with similar sized deep neighbor
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,W,Y,Y,TP,7.25,Y,Y,Y,N,Y,"Chase and display with similar sized deep neighbor (same as previous, with short pause between them)"
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,2.74,N,Y,N,N,Y,Charge
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,6.53,Y,N,N,N,Y,Chase
+7/7/2021,10:42,11:27,IV,5,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,6.27,Y,N,N,N,Y,Chase
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Floater,Similar,,E,Y,,,13.76,Y,Y,Y,N,Y,Chase and display with similar sized floater(?). Went shallow and eventually swam south.
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Floater,Smaller,,N,Y,,,16.4,Y,N,N,N,N,Chased smaller floater north. Started the stopwatch slightly slow.  
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Floater,Smaller,,N,Y,M,TP,4.06,Y,N,N,N,Y,Neighbor chased the prior floater back and then the focal chased it again briefly.
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,S,N,,,19.18,N,N,N,N,Y,"South neighbor approached, both stared, but no obvious display or interaction."
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,S,N,,,,,,,,,South neighbor passed within 5-meters and focal didn't acknowledge
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,W,N,,,,,,,,,Similar sized deep neighbor within 10-meters and focal didn't react
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Floater,Smaller,,E,Y,,,1,N,Y,N,N,N,Slight display at passing floater in shallower water headed south. Barely acknowledged. Was less than 1second display. 
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,W,N,,,,,,,,,Deeper neighbor saw focal approaching shared boundary and appeared to swim deeper to avoid interaction
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,2.82,,Y,,,,Charge
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,4.07,,Y,,,,Charge
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,7.17,Y,,,,,Chased IP out of territory into another territory
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,TP,Neighbor,Similar,,,Y,Y,IP,5.82,Y,,,,Y,Chased back by neighbor after chasing the prior initial phase fish out of the focal territory.
+7/7/2021,12:42,13:27,AQ,1,Sp viride,TP,29,3,Sp viride,IP,,,,,Y,,,22.82,Y,Y,Y,,,"Chase + display. Slow chase/follow, not very aggressive."
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,TP,Neighbor,Similar,28,N,Y,Y,IP,31.4,Y,Y,Y,N,Y,"After chasing IP north into another territory, the N. neighbor began to interact with the focal, engaging in charge, chase, and display near the boundary."
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,TP,Neighbor,Similar,,S,Y,Y,IP,68.73,Y,Y,Y,N,N,"This interaction is part of one long interaction (91.64s total - 3/4 for this TP). The focal chased an IP to the south, which elicited a response from a S. neighbor (this fish). About 3/4 of the way into the interaction another TP began interacting with the focal for the remaining 1/4 of the time before the focal chased an IP shallow and away from the southern boundary. "
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,TP,Neighbor,Similar,,S,Y,Y,TP,22.91,Y,Y,Y,N,N,"This interaction is part of one long interaction (91.64s total - 1/4 for this TP). The focal chased an IP to the south, which elicited a response from a S. neighbor. About 3/4 of the way into the interaction another TP (this fish) began interacting with the focal for the remaining 1/4 of the time before the focal chased an IP shallow and away from the southern boundary. "
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,UNK,UNK,UNK,,,Y,,,6.36,,Y,N,N,Y,Charged at something but unsure what. 
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,4.25,N,Y,N,N,Y,Charge
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,12.08,Y,N,N,N,Y,Chase
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,6.43,Y,N,N,N,N,"Chase, started a little late."
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,6.49,Y,N,N,N,Y,Chase
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,9.26,Y,N,N,N,Y,Chase
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,7.27,Y,N,N,N,Y,Chase
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,6.26,Y,N,N,N,Y,Chase
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,0.5,N,Y,N,N,Y,Display
+7/7/2021,13:32,14:17,AQ,2,Sp viride,TP,28,"3,4",Sp viride,IP,,,,,Y,,,11.53,N,Y,N,N,Y,Charge+Display
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Floater,Smaller,,,Y,,,15.69,Y,N,N,N,Y,Aggressive chase with smaller floater
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Floater,Smaller,,E,Y,,,34.83,Y,Y,Y,N,Y,"Chase and display at slightly smaller floater, neighbor took over at deep boundary. Started shallow, went south, then deep. "
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Neighbor,Similar,,SW,N,,,,,,,,,"Passed deep neighbor near SW tile, no interaction."
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Neighbor,Similar,28,,Y,,,13.34,N,Y,N,N,Y,Deep neighbor charged and displayed at focal
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Neighbor,Similar,,,Y,,,30.67,N,Y,N,N,Y,"Charge and display at neighbor. 2 IPs in water column w/neighbor, possibly mating. "
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Neighbor,Similar,,,Y,M,TP,19.63,N,Y,N,N,Y,"Charge and display at same neighbor after short pause following first charge and display. 2 IPs in water column w/neighbor, possibly mating. Other TP seemed to win though focal initiated. Focal ended displays first and swam back into territory. "
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,TP,Floater,Smaller,,E,Y,,,18.23,Y,N,N,N,Y,Chased smaller floater along shalllow boundary
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,0.95,N,Y,N,N,Y,Charge
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,2.23,N,Y,N,N,Y,Charge
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,1.49,N,Y,N,N,Y,Charge
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,4.9,Y,N,N,N,Y,Chase
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,4.06,Y,N,N,N,Y,Chase
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,10.13,Y,N,N,N,Y,Chase
+7/7/2021,15:36,16:21,AQ,3,Sp viride,TP,28,7,Sp viride,IP,,,,,Y,,,7.17,Y,N,N,N,Y,Chase
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,TP,Neighbor,Similar,,NW,N,,,,,,,,,"Similar sized deep N? neighbor w/in 5m with no interaction, even though focal chased an IP near. "
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,TP,Neighbor,Similar,,S,Y,Y,IP,32,Y,Y,Y,N,N,Similarly sized south neighbor charged chased and displayed at focal after the focal chased an IP (non haremic?) into its territory. The focal displayed an charged at neighbor once too. This interaction was followed immediately by an interaction with a floater. Total interaction was 49.17s. This interaction was approx. 32 seconds.
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,TP,Floater,Smaller,26,,Y,Y,TP,17,Y,N,N,N,N,This interaction immediately followed the prior interaction with a neighbor. Total interaction was 49.17s. This interaction was approx. 17 seconds.
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,TP,Neighbor,Similar,,W,N,,,,,,,,,Passed within 10m of deep neighbor with no interaction.
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,2.75,N,Y,N,N,Y,Charge
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,3.48,N,Y,N,N,Y,"Charge (during this two TPs got chased, see previous)"
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,3.68,N,Y,N,N,Y,Charge
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,8.46,Y,N,N,N,Y,Chase
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,N,,,30.1,Y,N,N,N,Y,"Chase, non-aggressive and seemed mostly like it was just following..."
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,5.53,Y,N,N,N,Y,Chase
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,7.86,Y,N,N,N,Y,Chase
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,10.98,Y,Y,Y,N,Y,Chase and display
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,8.68,Y,Y,Y,N,Y,Chase and display
+7/8/2021,10:57,11:42,AQ,4,Sp viride,TP,29.5,3,Sp viride,IP,,,,,Y,,,7.2,Y,Y,Y,N,Y,Chase and display
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,TP,Neighbor,Similar,28,SW,Y,,,12.17,Y,Y,Y,N,Y,Charge/chase at deep south neighbor (27-28cm) with no obvious display.
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,TP,Floater,Smaller,,W,Y,,,20.46,Y,N,N,N,N,"Chased an apparent floater aggressively down the reef slope, 20.46s from start to losing visual."
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,TP,Neighbor,Similar,28,SW,Y,Y,TP,80.94,N,Y,N,N,N,Estimated time from total time from start of previous chase to when these two stopped. Focal ascended rapidly and began to charge/display with SW deep neighbor
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,TP,Neighbor,Similar,28,SW,Y,,,7.17,Y,Y,Y,N,Y,Charge/chase deep south neighbor (28cm)
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,TP,Neighbor,Similar,,NW,N,Y,IP,,,,,,,"Focal chased (non haremic?) IP to within 5-10 meters of deep N. neighbor, with no interaction."
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,2.09,N,Y,N,N,Y,Charge
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,1.41,N,Y,N,N,Y,Charge
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,1.86,N,Y,N,N,Y,Charge
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,6.5,Y,N,N,N,Y,Chase
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,N,,,12.6,Y,N,N,N,Y,"Chase (non-aggressive, but followed with purpose?)"
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,7.53,Y,N,N,N,Y,Chase
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,4.13,Y,Y,Y,N,Y,Chase and display (non haremic? Chased south out of territory)
+7/8/2021,11:51,12:36,AQ,5,Sp viride,TP,29,6,Sp viride,IP,,,,,Y,,,18.01,Y,Y,Y,N,Y,Chase and display
