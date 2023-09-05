@@ -3061,11 +3061,13 @@ TPTP.PHR95.sum
 
 
 TPTP.PHR50.sum <- PHR.overlaps %>%
-  group_by(Interaction) %>%
+  group_by(Interaction, .drop = F) %>%
   filter(PHR50 > 0) %>%
   summarise(N = n(),
             mPHR50 = mean(PHR50),
             sePHR50 = sd(PHR50)/sqrt(N)) %>%
+  mutate_all(~replace(., is.nan(.), 0)) %>%
+  mutate_all(~replace(., is.na(.), 0)) %>%
   mutate(across(mPHR50:sePHR50, round, 2)) %>%
   mutate("PHR50" = sprintf("%.2f\u00B1%.2f", mPHR50, sePHR50)) %>%
   separate(Interaction, c("Species1", "Species2"), sep = "-") %>% 
