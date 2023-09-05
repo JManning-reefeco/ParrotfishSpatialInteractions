@@ -1,0 +1,3 @@
+PairType,N,BA
+Interspecific,9,0.51 ± 0.05
+Intraspecific,9,0.48 ± 0.04

@@ -1,0 +1,5 @@
+PairType,Foc.Species,Foc.Phase,N,Mean (SD) Relocations,Mean (SD) Time (min)
+Interspecific,Scvetula,TP,9,183.78 ± 41.5,31.75 ± 2.44
+Interspecific,Spviride,TP,9,175.56 ± 22.11,30.69 ± 1.39
+Intraspecific,Spviride,IP,9,192.78 ± 65.86,30.1 ± 2.89
+Intraspecific,Spviride,TP,9,162.44 ± 26.64,29.91 ± 3.35
