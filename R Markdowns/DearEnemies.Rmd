@@ -364,7 +364,7 @@ sum.int.total
 #Re-plot interaction frequency
 count.box2 <- ggplot(data = tpcounts,aes(y = N,x = Int.Type)) +
   geom_boxplot(outlier.shape = 4, size = 0.25, position = position_dodge2(preserve = "single"), alpha = 0.9) +
-  geom_point(position=position_dodge2(width = 0.1), colour = "black", size = 1) +
+  geom_point(position=position_dodge2(width = 0.1), colour = "black", size = 1.5, alpha = 0.5) +
   labs(y = "Number of Interactions", x = "Relationship") +
   theme_classic(base_family = "Arial") +
   theme(legend.position = "none",
@@ -375,7 +375,7 @@ count.box2
 #Re-plot interaction durations
 length.box2 <- ggplot(data = tp3, aes(y = Duration, x = Int.Type)) +
   geom_boxplot(outlier.shape = 4, size = 0.25, position = position_dodge2(preserve = "single"), alpha=0.9) +
-  geom_point(aes(color = Outlier), position = position_dodge2(width = 0.1), size = 1) +
+  geom_point(aes(color = Outlier), position = position_dodge2(width = 0.1), size = 1.5, alpha = 0.5) +
   labs(y = "Interaction Duration (s)", x = "Relationship") +
   scale_color_manual(values = c("black", "white")) +
   theme_classic() +
@@ -391,8 +391,8 @@ dee.p <- ggarrange(count.box2 + rremove("xlab") + rremove("x.text"), length.box2
 dee.p
 
 #Save figure
-ggsave("Figures/Figure2_DearEnemy.png", plot = dee.p,
-       width = 5, height = 7, dpi = 300)
+ggsave("Figures/DearEnemy/Figure2_DearEnemy.png", plot = dee.p,
+       width = 3.25, height = 5, dpi = 300)
 ```
 
 
@@ -591,7 +591,7 @@ IV.spv.PRE <- ggplot() +
   theme_classic() +
   theme(text=element_text(family = "Arial"),
         axis.text = element_text(size = 10),
-        panel.border = element_rect(colour = "black", fill=NA, size=2))
+        panel.border = element_rect(colour = "black", fill=NA, linewidth = 2))
 IV.spv.PRE
 
 #Plot tracks from July
@@ -604,7 +604,7 @@ IV.spv.POST <- ggplot() +
   theme_classic() +
   theme(text=element_text(family = "Arial"),
         axis.text = element_text(size = 10),
-        panel.border = element_rect(colour = "black", fill=NA, size=2))
+        panel.border = element_rect(colour = "black", fill=NA, linewidth = 2))
 IV.spv.POST
 ```
 Compare these plots do determine which tracks are replicate tracks to merge for home range computation.
@@ -776,6 +776,6 @@ IV.spv.floaters2 <- ggplot() +
         legend.position = "none")
 IV.spv.floaters2
 
-ggsave("Figures/Figure3_DearEnemy.png", plot = IV.spv.floaters2,
-       width = 4, height = 5, dpi = 300)
+ggsave("Figures/DearEnemy/Figure3_DearEnemy.png", plot = IV.spv.floaters2,
+       width = 3.25, height = 5, dpi = 300)
 ```
