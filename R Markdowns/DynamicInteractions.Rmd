@@ -221,7 +221,7 @@ dyn.tr.sum.all <- dyn.tr.df %>%
   unite("Mean (SD) Time (min)", mTime:sdTime, sep = " \u00B1 ")
 dyn.tr.sum.all
 
-write.table(dyn.tr.sum.all, file = "DataSummary/dyn.tr.sum.all.txt",
+write.table(dyn.tr.sum.all, file = "DataSummary/StaticDynamic/dyn.tr.sum.all.txt",
             sep = ",", quote = FALSE, row.names = F)
 ```
 Track summary for all individuals in interspecific pairs of simultaneously tracked parrotfishes
@@ -330,7 +330,7 @@ dyn.mkde.sum <- dyn.area.mkde %>%
   unite("HR", mHR:sdHR, sep = " \u00B1 ")
 dyn.mkde.sum
 
-write.table(dyn.mkde.sum, file = "DataSummary/dynamic.HR.txt",
+write.table(dyn.mkde.sum, file = "DataSummary/StaticDynamic/dynamic.HR.txt",
             sep = ",", quote = FALSE, row.names = F)
 ```
 
@@ -793,9 +793,6 @@ DI.p <- ggarrange(Inter.p, Intra.p,
                      labels = c("", ""),
                      ncol = 1, nrow = 2, align = "v")
 DI.p
-
-ggsave("Figures/PseudoDI.png", plot = DI.p,
-       width = 3, height = 4, dpi = 300)
 ```
 
 The frequency of simultaneous relocations of inter- and intraspecific pairs within shared areas did not differ from the frequency expected for independent movement. Therefore, despite significant static overlap, pairs of parrotfishes moved independently relative to the shared areas. We expected that there would be attraction among intraspecific pairs, both because transmission of social information among these individuals could increase successful identification of profitable foraging areas, or improve defense of haremic females (for TP Sp viride). We expected to see avoidance by interspecific pairs to limit interference competition and therefore allow for coexistence within shared areas. Now lets look at dynamic interaction in shared space.
@@ -962,7 +959,7 @@ staticdynamic <- dyn.overlap.final.BA %>%
   mutate(across(BA:p.avoid, round, 3))
 staticdynamic
 
-write.table(staticdynamic, "DataSummary/StaticDynamic.txt", 
+write.table(staticdynamic, "DataSummary/StaticDynamic/StaticDynamic.txt", 
             sep = ",", quote = FALSE, row.names = F)
 
 inter.staticdynamic <- staticdynamic %>%
@@ -975,7 +972,7 @@ inter.staticdynamic
 
 This takes some time, so not necessary unless you want to rework for a different pair of individuals.
 
-```{r eval = F}
+```{r}
 library(moveVis)
 library(move)
 library(scales)
@@ -1035,5 +1032,5 @@ frames.Inter.04.f <- add_gg(frames.Inter.04, expr(list(guides(color = guide_lege
 frames.Inter.04.f[[100]] # preview one of the frames, e.g. the 100th frame
 
 # animate frames
-animate_frames(frames.Inter.04.f, out_file = "Figures/InterspecificDynamicInteractions.gif", overwrite = T)
+animate_frames(frames.Inter.04.f, out_file = "Figures/StaticDynamic/InterspecificDynamicInteractions.gif", overwrite = T)
 ```
