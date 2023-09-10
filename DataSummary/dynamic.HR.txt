@@ -1,5 +1,0 @@
-PairType,Foc.Species,Foc.Phase,N,HR
-Interspecific,Scvetula,TP,9,307.17 ± 55.66
-Interspecific,Spviride,TP,9,389.25 ± 87.16
-Intraspecific,Spviride,IP,9,163.11 ± 54.88
-Intraspecific,Spviride,TP,9,350.02 ± 132.43

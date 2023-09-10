@@ -313,7 +313,7 @@ sxp.traj.sum <- traj_summary2 %>%
 
 sxp.traj.sum
 
-write.table(sxp.traj.sum, file = "DataSummary/sxp.traj.sum.txt",
+write.table(sxp.traj.sum, file = "DataSummary/StaticDynamic/sxp.traj.sum.txt",
             sep = ",", quote = FALSE, row.names = F)
 
 overall.traj.sum <- traj_summary2 %>%
@@ -340,7 +340,7 @@ overall.traj.sum <- traj_summary2 %>%
 
 overall.traj.sum
 
-write.table(overall.traj.sum, file = "DataSummary/overall.traj.sum.txt",
+write.table(overall.traj.sum, file = "DataSummary/StaticDynamic/overall.traj.sum.txt",
             sep = ",", quote = FALSE, row.names = F)
 ```
 
@@ -416,7 +416,7 @@ for(i in unique(aqm.sf.met$ID)){
                      ncol = 1, nrow = 2, align = "v",
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
   
-  ggsave(filename = sprintf('Figures/Stationarity/AQ/%s.png', i), plot = gi)
+  ggsave(filename = sprintf('Figures/StaticDynamic/Stationarity/AQ/%s.png', i), plot = gi)
 }
 
 
@@ -439,7 +439,7 @@ for(i in unique(ivm.sf.met$ID)){
                      ncol = 1, nrow = 2, align = "v",
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
   
-  ggsave(filename = sprintf('Figures/Stationarity/IV/%s.png', i), plot = gi)
+  ggsave(filename = sprintf('Figures/StaticDynamic/Stationarity/IV/%s.png', i), plot = gi)
 }
 ```
 
@@ -555,7 +555,7 @@ sxp.hr.sum <- area.mkde %>%
 
 sum(sxp.hr.sum$Count) #should be 128
 
-write.table(sxp.hr.sum, file = "DataSummary/sxp.hr.sum.txt",
+write.table(sxp.hr.sum, file = "DataSummary/StaticDynamic/sxp.hr.sum.txt",
             sep = ",", quote = FALSE, row.names = F)
 ```
 
@@ -736,7 +736,7 @@ hr.cu.p <- ggarrange(hr.sxp.p, cu.sxp.p,
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 hr.cu.p
 
-ggsave("Figures/Fig1.png", plot = hr.cu.p,
+ggsave("Figures/StaticDynamic/Fig1.png", plot = hr.cu.p,
        width = 4, height = 5.5, dpi = 300)
 ```
 
@@ -915,7 +915,7 @@ AQ_SCV_scv_HR <- ggplot() +
   scale_fill_manual(values = match_palette)
 AQ_SCV_scv_HR
 
-ggsave("Figures/FigureS9.png", plot = AQ_SCV_scv_HR,
+ggsave("Figures/StaticDynamic/FigureS9.png", plot = AQ_SCV_scv_HR,
        width = 6, height = 6, dpi = 300)
 
 
@@ -941,7 +941,7 @@ AQ_HRs <- ggarrange(AQ_SPV_HR, AQ_SPA_HR, AQ_SCV_HR, AQ_SCT_HR,
                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 AQ_HRs
 
-ggsave("Figures/TP_maps_AQ.png", plot = AQ_HRs,
+ggsave("Figures/StaticDynamic/TP_maps_AQ.png", plot = AQ_HRs,
        width = 6.5, height = 7.5, dpi = 300)
 ```
 
@@ -1017,7 +1017,7 @@ IV_HRs <- ggarrange(IV_SPV_HR, IV_SPA_HR, IV_SCV_HR, IV_SCT_HR,
                     font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 IV_HRs
 
-ggsave("Figures/TP_maps_IV.png", plot = IV_HRs,
+ggsave("Figures/StaticDynamic/TP_maps_IV.png", plot = IV_HRs,
        width = 6.5, height = 7.5, dpi = 300)
 ```
 
@@ -1555,8 +1555,6 @@ n_distinct(tot.pdist.analysis$ID)
 
 dur.glm <- glmmTMB(data = tot.pdist.analysis, logdur ~ Site + Species + Int.ID + (1|ID), gaussian(link = "identity"))
 
-check_collinearity(dur.glm) ##no collinearity between Site, Species, and Int.ID
-
 test.dur.glm <- simulateResiduals(fittedModel = dur.glm, n = 250, plot = T) #Normal and there is no heteroscedasticity
 plotResiduals(test.dur.glm) #looks good
 testDispersion(test.dur.glm) #meets dispersion assumptions
@@ -1567,7 +1565,7 @@ options(contrasts = c("contr.sum", "contr.poly"))
 glmm.int.dur.anova <- Anova(dur.glm, type = 3)
 glmm.int.dur.anova
 
-write.table(glmm.int.dur.anova, file = "StatisticalOutputs/Interaction.Dur.GLMM.ANOVA.txt",
+write.table(glmm.int.dur.anova, file = "StatisticalOutputs/StaticDynamic/Interaction.Dur.GLMM.ANOVA.txt",
             sep = ",", quote = F, row.names = T)
 ```
 Family: gaussian  ( identity )
@@ -1634,7 +1632,7 @@ summary(nb.c)
 nb.c.ANOVA <- Anova(nb.c, type = 3)
 nb.c.ANOVA
 
-write.table(nb.c.ANOVA, file = "StatisticalOutputs/Interaction.Count.GLM.ANOVA.txt",
+write.table(nb.c.ANOVA, file = "StatisticalOutputs/StaticDynamic/Interaction.Count.GLM.ANOVA.txt",
             sep = ",", quote = F, row.names = T)
 ```
 Family: nbinom2  ( log )
@@ -1690,7 +1688,7 @@ glmm.int.dist.edge.anova <- Anova(dist.edge.glm, type = 3)
 glmm.int.dist.edge.anova
 
 write.table(glmm.int.dist.edge.anova, 
-            file = "StatisticalOutputs/Interaction.Distance.GLMM.ANOVA.txt",
+            file = "StatisticalOutputs/StaticDynamic/Interaction.Distance.GLMM.ANOVA.txt",
             sep = ",", quote = F, row.names = T)
 ```
 Family: gaussian  ( identity )
@@ -1810,7 +1808,7 @@ interactions.p <- ggarrange(int.counts.p, int.dur.p, int.dist.p,
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 interactions.p
 
-ggsave("Figures/Fig2.png", plot = interactions.p,
+ggsave("Figures/StaticDynamic/Fig2.png", plot = interactions.p,
        width = 6, height = 6, dpi = 300)
 ```
 
@@ -1854,7 +1852,7 @@ interactions.p2 <- ggarrange(int.counts.p2, int.dist.p2,
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 interactions.p2
 
-ggsave("Figures/FigS2.png", plot = interactions.p2,
+ggsave("Figures/StaticDynamic/FigS2.png", plot = interactions.p2,
        width = 6, height = 4, dpi = 300)
 ```
 
@@ -1917,7 +1915,7 @@ aq.scv.pis.p2 <- ggplot() +
   scale_fill_manual(values = brewer.pal(12, "Paired"))
 aq.scv.pis.p2
 
-ggsave("Figures/FigS6.png", plot = aq.scv.pis.p2,
+ggsave("Figures/StaticDynamic/FigS6.png", plot = aq.scv.pis.p2,
        width = 6, height = 6, dpi = 300)
 ```
 
@@ -1980,7 +1978,7 @@ buffers.p <- ggplot() +
   scale_fill_manual(values = brewer.pal(12, "Paired"))
 buffers.p
 
-ggsave("Figures/FigS7.png", plot = buffers.p,
+ggsave("Figures/StaticDynamic/FigS7.png", plot = buffers.p,
        width = 6, height = 6, dpi = 300)
 ```
 
@@ -2217,7 +2215,7 @@ overlap.emm.p <- ggarrange(BA95.resp.p, BA95.zi.p + rremove("ylab"), BA95.disp.p
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 overlap.emm.p
 
-ggsave("Figures/BA95_model.png", plot = overlap.emm.p,
+ggsave("Figures/StaticDynamic/BA95_model.png", plot = overlap.emm.p,
        width = 6.5, height = 4, dpi = 300)
 ```
 
@@ -2354,7 +2352,7 @@ BA95.emm.pwpp <- ggarrange(BA95.resp.pwpp + rremove("xlab") + rremove("ylab"), B
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 BA95.emm.pwpp
 
-ggsave("Figures/BA95_model_pwpp.png", plot = BA95.emm.pwpp,
+ggsave("Figures/StaticDynamic/BA95_model_pwpp.png", plot = BA95.emm.pwpp,
        width = 6.5, height = 8, dpi = 300)
 ```
 
@@ -2610,7 +2608,7 @@ PHR95.emm.p <- ggarrange(PHR95.resp.p, PHR95.zi.p + rremove("ylab"), PHR95.disp.
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 PHR95.emm.p
 
-ggsave("Figures/PHR95_model.png", plot = PHR95.emm.p,
+ggsave("Figures/StaticDynamic/PHR95_model.png", plot = PHR95.emm.p,
        width = 6.5, height = 4, dpi = 300)
 ```
 Family: beta  ( logit )
@@ -2760,7 +2758,7 @@ PHR95.emm.pwpp <- ggarrange(PHR95.resp.pwpp + rremove("xlab") + rremove("ylab"),
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 PHR95.emm.pwpp
 
-ggsave("Figures/PHR95_model_pwpp.png", plot = PHR95.emm.pwpp,
+ggsave("Figures/StaticDynamic/PHR95_model_pwpp.png", plot = PHR95.emm.pwpp,
        width = 6.5, height = 8, dpi = 300)
 ```
 
@@ -2871,7 +2869,7 @@ PHR50.emm.p <- ggarrange(PHR50.resp.p, PHR50.zi.p + rremove("ylab"), PHR50.disp.
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 PHR50.emm.p
 
-ggsave("Figures/PHR50_model.png", plot = PHR50.emm.p,
+ggsave("Figures/StaticDynamic/PHR50_model.png", plot = PHR50.emm.p,
        width = 6.5, height = 4, dpi = 300)
 ```
 Family: beta  ( logit )
@@ -3020,7 +3018,7 @@ PHR50.emm.pwpp <- ggarrange(PHR50.resp.pwpp + rremove("xlab") + rremove("ylab"),
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 PHR50.emm.pwpp
 
-ggsave("Figures/PHR50_model_pwpp.png", plot = PHR50.emm.pwpp,
+ggsave("Figures/StaticDynamic/PHR50_model_pwpp.png", plot = PHR50.emm.pwpp,
        width = 6.5, height = 8, dpi = 300)
 ```
 
@@ -3129,7 +3127,7 @@ overlaps.p <- ggarrange(BA95.hm, PHR95.hm, PHR50.hm,
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 overlaps.p
 
-ggsave("Figures/Fig3.png", plot = overlaps.p,
+ggsave("Figures/StaticDynamic/Fig3.png", plot = overlaps.p,
        width = 4.5, height = 8, dpi = 400)
 ```
 
@@ -3186,7 +3184,7 @@ TPIPovlp.sum <- TPIPovlp %>%
   unite("Spatial Overlap (BA)", mBA:BAse, sep = " \u00B1 ", remove = F)
 TPIPovlp.sum
 
-write.table(TPIPovlp.sum, file = "DataSummary/TPIPoverlap.txt", 
+write.table(TPIPovlp.sum, file = "DataSummary/StaticDynamic/TPIPoverlap.txt", 
             sep = ",", quote = FALSE, row.names = F)
 
 #Irrespective of species
@@ -3261,7 +3259,7 @@ TPIP.SO.p <- ggplot(TPIPovlp.sum, aes(x=Species1, y=mBA, fill=Species1)) +
   scale_fill_manual(values = sp.color.all[2:5])
 TPIP.SO.p
 
-ggsave("Figures/FigS8.png", plot = TPIP.SO.p,
+ggsave("Figures/StaticDynamic/FigS8.png", plot = TPIP.SO.p,
        width = 4, height = 4, dpi = 300)
 ```
 Family: beta  ( logit )
@@ -3323,8 +3321,6 @@ TPIP.PHR95.p <- ggplot(TPIPovlp2.sum, aes(x=Species1, y=mPHR95, fill=Species1)) 
   scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
 TPIP.PHR95.p
 
-# ggsave("Figures/FigSX2.png", plot = TPIP.PHR95.p,
-#        width = 4, height = 4, dpi = 300)
 
 TPIP.PHR50.p <- ggplot(TPIPovlp2.sum, aes(x=Species1, y=mPHR50, fill=Species1)) + 
   geom_col(aes(alpha = Phase1), position = position_dodge2(width = 0.9, preserve = "single"), size = 0.5, color = "black") +
@@ -3342,7 +3338,4 @@ TPIP.PHR50.p <- ggplot(TPIPovlp2.sum, aes(x=Species1, y=mPHR50, fill=Species1)) 
   scale_alpha_discrete(range = c(1, 0.5)) +
   scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
 TPIP.PHR50.p
-
-# ggsave("Figures/FigSX3.png", plot = TPIP.PHR50.p,
-#        width = 4, height = 4, dpi = 300)
 ```
