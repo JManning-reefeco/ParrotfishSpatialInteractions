@@ -385,7 +385,7 @@ length.box2 <- ggplot(data = tp3, aes(y = Duration, x = Int.Type)) +
 length.box2
 
 dee.p <- ggarrange(count.box2 + rremove("xlab") + rremove("x.text"), length.box2,
-                     labels = c("a", "b"),
+                     labels = c("A", "B"),
                      ncol = 1, nrow = 2, align = "v",
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 dee.p
