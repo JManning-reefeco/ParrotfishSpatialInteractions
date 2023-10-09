@@ -3123,7 +3123,7 @@ PHR50.hm
 
 ```{r}
 overlaps.p <- ggarrange(BA95.hm, PHR95.hm, PHR50.hm,
-                     ncol = 1, nrow = 3, align = "v",
+                     ncol = 1, nrow = 3, align = "v", labels = c("a", "b", "c"),
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 overlaps.p
 
