@@ -1033,4 +1033,6 @@ frames.Inter.04.f[[100]] # preview one of the frames, e.g. the 100th frame
 
 # animate frames
 animate_frames(frames.Inter.04.f, out_file = "Figures/StaticDynamic/InterspecificDynamicInteractions.gif", overwrite = T)
+
+animate_frames(frames.Inter.04.f, out_file = "Figures/StaticDynamic/InterspecificDynamicInteractions.mp4", overwrite = T)
 ```
