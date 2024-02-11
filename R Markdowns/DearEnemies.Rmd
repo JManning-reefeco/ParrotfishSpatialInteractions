@@ -27,6 +27,7 @@ library(car) #ANOVA
 library(glmmTMB) #For linear, generalized linear, and generalized linear mixed modeling
 library(performance)
 library(DHARMa) #Checking model assumptions
+library(emmeans) #marginal means of mixed models
 
 #Data visualization
 library(ggplot2) #Tidyverse visualization package
@@ -211,7 +212,8 @@ tp2 <- tp %>%
   unite("Territory", c("Site", "Terr.Num"), remove = F) %>%
   mutate(Intensity = ifelse(Chase == "Y", "High", "Low")) %>%
   mutate(across(Duration, round)) %>% #round to the nearest second
-  left_join(tcca.terr)
+  left_join(tcca.terr) %>%
+  mutate(Chase.Bi = as.numeric(ifelse(Chase == "Y", "1", "0")))
 
 #Subset for non-interactions
 tp.n <- tp %>%
@@ -391,7 +393,7 @@ dee.p <- ggarrange(count.box2 + rremove("xlab") + rremove("x.text"), length.box2
 dee.p
 
 #Save figure
-ggsave("Figures/DearEnemy/Figure2_DearEnemy.png", plot = dee.p,
+ggsave("Figures/DearEnemy/FigureS1_DearEnemy.png", plot = dee.p,
        width = 3.25, height = 5, dpi = 300)
 ```
 
@@ -401,7 +403,8 @@ ggsave("Figures/DearEnemy/Figure2_DearEnemy.png", plot = dee.p,
 ```{r}
 #Summarize the number of interactions between neighbors and floaters that were either highly aggressive or not
 intensity.sum <- tp2 %>%
-  group_by(Territory, Int.Type, Intensity) %>%
+  mutate(across(c(Territory, Int.Type, Intensity), as.factor)) %>%
+  group_by(Territory, Int.Type, Intensity, .drop = F) %>%
   summarise(N = n())
 intensity.sum
 
@@ -438,6 +441,45 @@ intenseneighbors <- tp2 %>%
 #Take a look at resource holding potential (RHP), here relative size, of neighbors and floaters
 RHP <- table(tp2$Int.Type, tp2$Int.Size)
 RHP
+
+#Chase Probability
+intense.glm <- glmmTMB(data = tp2, Chase.Bi ~ Site + Int.Type + (1|Site:Territory), family = "binomial")
+
+test.intense.glm <- simulateResiduals(fittedModel = intense.glm, n = 250, plot = T) #looks good
+plotResiduals(test.intense.glm) #looks good
+testDispersion(test.intense.glm) #meets dispersion assumptions
+testOutliers(test.intense.glm) #outlier test is not significant
+
+#Stats
+summary(intense.glm)
+
+glmm.intense.anova <- Anova(intense.glm, type = 3)
+glmm.intense.anova
+
+fixef(intense.glm)
+confint(intense.glm)
+
+#marginal means for significant factors
+
+emm.intense.type <- emmeans(intense.glm, ~Int.Type, type = "response")
+emm.intense.sum <- summary(emm.intense.type)
+
+
+emm.intense.p <- ggplot(emm.intense.sum, aes(x = Int.Type, y = prob)) +
+  geom_jitter(data = tp2, aes(x = Int.Type, y = Chase.Bi), width = 0.25, height = 0, color = "gray45") +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = asymp.LCL, ymax = asymp.UCL, group=Int.Type), width = 0) +
+  theme_classic() +
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 10, color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(color = "black"),
+        legend.position = "none") +
+  labs(x = "", y = "Chase Probability")
+emm.intense.p
+
+ggsave("Figures/DearEnemy/Figure2_DearEnemy.png", plot = emm.intense.p,
+       width = 3.25, height = 4, dpi = 300)
 ```
 
 Fisher's Exact Test for Count Data
@@ -451,6 +493,39 @@ sample estimates:
 odds ratio 
    14.6328 
 
+
+GLMM of the probability of chase occurring as a function of site and interactor identity (neighbor v. stranger) with random effects
+Family: binomial  ( logit )
+Formula:          Chase.Bi ~ Site + Int.Type + (1 | Site:Territory)
+Data: tp2
+
+     AIC      BIC   logLik deviance df.resid 
+    45.2     52.8    -18.6     37.2       46 
+
+Random effects:
+
+Conditional model:
+ Groups         Name        Variance Std.Dev.
+ Site:Territory (Intercept) 0.0303   0.1741  
+Number of obs: 50, groups:  Site:Territory, 10
+
+Conditional model:
+                 Estimate Std. Error z value Pr(>|z|)  
+(Intercept)        3.0313     1.2506   2.424   0.0154 *
+SiteIV             0.4586     0.8336   0.550   0.5822  
+Int.TypeNeighbor  -2.6880     1.1989  -2.242   0.0250 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+
+Analysis of Deviance Table (Type III Wald chisquare tests)
+Response: Chase.Bi
+             Chisq Df Pr(>Chisq)  
+(Intercept) 5.8750  1    0.01536 *
+Site        0.3027  1    0.58222  
+Int.Type    5.0265  1    0.02496 *
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
 
 
 
