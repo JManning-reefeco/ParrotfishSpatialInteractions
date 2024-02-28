@@ -200,6 +200,27 @@ tcca.box.terr
 ```
 
 
+##Examine territory differences in harem size
+
+Summarize at territory level and calculate Mean (SE) for all territories.
+
+```{r}
+harem.terr <- dear %>%
+  select(Site, Terr.Num, Harem) %>%
+  group_by(Site, Terr.Num) %>%
+  slice(1) %>%
+  mutate(Harem = case_when(Site == "AQ" & Terr.Num == "2" ~ "4", TRUE ~ Harem)) %>% #Used largest of two numbers for AQ-Terr 2
+  mutate_at(vars(Harem), as.numeric)
+```
+
+```{r}
+Mean.Harem = mean(harem.terr$Harem) #4.1
+SD.Harem = sd(harem.terr$Harem) #1.5
+N = 10
+SE.Harem = SD.Harem/sqrt(N) #0.5
+range(harem.terr$Harem) #2-7
+```
+
 
 
 ##Analyses of TP S. viride intraspecific interactions with other TP S. viride
@@ -846,7 +867,7 @@ IV.spv.floaters2 <- ggplot() +
   theme_classic(base_family = "Arial") +
   theme(axis.text = element_text(size = 10, color = "black"),
         axis.title = element_text(size = 12, color = "black"),
-        panel.border = element_rect(colour = "black", fill=NA, size=2),
+        panel.border = element_rect(colour = "black", fill=NA, linewidth=2),
         legend.position = "none")
 IV.spv.floaters2
 
