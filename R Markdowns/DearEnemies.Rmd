@@ -298,7 +298,7 @@ glmm.count.ANOVA
 Analysis of Deviance Table (Type II Wald chisquare tests)
 Response: N
           Chisq Df Pr(>Chisq)
-Site     1.9729  1     0.1601
+Site     1.9728  1     0.1601
 Int.Type 0.7165  1     0.3973
 
 
