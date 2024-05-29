@@ -385,9 +385,10 @@ sum.int.total <- tp3 %>%
 sum.int.total
 
 #Re-plot interaction frequency
-count.box2 <- ggplot(data = tpcounts,aes(y = N,x = Int.Type)) +
+count.box2 <- ggplot(data = tpcounts %>% separate(Territory, c("Site", "Num"), sep = "_"), 
+                     aes(y = N, x = Int.Type)) +
   geom_boxplot(outlier.shape = 4, size = 0.25, position = position_dodge2(preserve = "single"), alpha = 0.9) +
-  geom_point(position=position_dodge2(width = 0.1), colour = "black", size = 1.5, alpha = 0.5) +
+  geom_point(aes(color = Site), position=position_dodge2(width = 0.1), size = 1.5, alpha = 0.5) +
   labs(y = "Number of Interactions", x = "Relationship") +
   theme_classic(base_family = "Arial") +
   theme(legend.position = "none",
@@ -397,10 +398,10 @@ count.box2
 
 #Re-plot interaction durations
 length.box2 <- ggplot(data = tp3, aes(y = Duration, x = Int.Type)) +
-  geom_boxplot(outlier.shape = 4, size = 0.25, position = position_dodge2(preserve = "single"), alpha=0.9) +
-  geom_point(aes(color = Outlier), position = position_dodge2(width = 0.1), size = 1.5, alpha = 0.5) +
+  geom_boxplot(outlier.shape = NA, size = 0.25, position = position_dodge2(preserve = "single"), alpha = 0.9) +
+  geom_point(aes(color = Site, shape = Outlier), position = position_dodge2(width = 0.1), size = 1.5, alpha = 0.5) +
+  scale_shape_manual(values = c(19, 4)) +
   labs(y = "Interaction Duration (s)", x = "Relationship") +
-  scale_color_manual(values = c("black", "white")) +
   theme_classic() +
   theme(legend.position = "none",
         axis.title = element_text(size = 12, color = "black"),
@@ -499,7 +500,7 @@ emm.intense.p <- ggplot(emm.intense.sum, aes(x = Int.Type, y = prob)) +
   labs(x = "", y = "Chase Probability")
 emm.intense.p
 
-ggsave("Figures/DearEnemy/Figure2_DearEnemy.png", plot = emm.intense.p,
+ggsave("Figures/DearEnemy/Figure2a_DearEnemy.png", plot = emm.intense.p,
        width = 3.25, height = 4, dpi = 300)
 ```
 
@@ -871,6 +872,7 @@ IV.spv.floaters2 <- ggplot() +
         legend.position = "none")
 IV.spv.floaters2
 
-ggsave("Figures/DearEnemy/Figure3_DearEnemy.png", plot = IV.spv.floaters2,
-       width = 3.25, height = 5, dpi = 300)
+ggsave("Figures/DearEnemy/Figure2b_DearEnemy.png", plot = IV.spv.floaters2,
+       width = 3.25, height = 4, dpi = 300)
 ```
+
