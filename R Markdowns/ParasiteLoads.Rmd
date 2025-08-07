@@ -1,0 +1,378 @@
+---
+title: "Parasites"
+author: "Joshua Manning"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+Load packages
+
+```{r}
+#Data wrangling
+library(plyr)
+library(dplyr) 
+library(tidyr) 
+library(tibble) 
+library(lubridate) #Dealing with time issues
+
+#Movement and spatial analyses
+library(adehabitatHR) #Home range analyses
+library(adehabitatLT)
+library(sf)  #Simple features
+library(sp)  #This will be retired soon, but the code using sp objects can be shifted to sf objects easily enough
+library(nngeo) #For function st_remove_holes
+
+#Statistical analyses
+library(car) #ANOVA
+library(glmmTMB) #For linear, generalized linear, and generalized linear mixed modeling
+library(performance)
+library(DHARMa) #Checking model assumptions
+library(emmeans) #marginal means of mixed models
+
+#Data visualization
+library(ggplot2) #Tidyverse visualization package
+library(ggpubr) #For ggarrange() etc.
+library(extrafont) #Change plot fonts
+
+#Misc
+library(conflicted) #Resolved conflicts
+```
+
+Resolve conflicts
+
+```{r}
+conflict_prefer("rename", "dplyr")
+conflict_prefer("group_by", "dplyr")
+conflict_prefer("filter", "dplyr")
+conflict_prefer("summarise", "dplyr")
+conflict_prefer("select", "dplyr")
+conflict_prefer("mutate", "dplyr")
+conflict_prefer("count", "dplyr")
+conflict_prefer("contr.sum", "stats")
+conflict_prefer("id", "adehabitatLT")
+```
+
+
+## Load data
+
+
+Read in parasite data
+
+```{r eval = F}
+parasites <- read.csv("Data/parasites_total.csv") %>%
+  separate(File.Name, c("Site", "Species", "Phase", "Date", "EndTime", "Vid"), sep = "_") %>%
+  select(-Vid, Body.Part) %>%
+  rename(BS1 = BS_Reviewer.1,
+         BS2 = BS_Reviewer.2,
+         WS1 = WS_Reviewer.1,
+         WS2 = WS_Reviewer.2) %>%
+  mutate(BS = round((BS1+BS2)/2, 0),
+         WS = round((WS1+WS2)/2, 0),
+         Total_load = BS + WS) %>%
+  select(-c(BS1, BS2, WS1, WS2, Body.Part))
+```
+
+
+Read in home range/core use sizes and contours for mapping
+
+```{r eval = F}
+hr.size <- read.csv("ProcessedData/Full_HRs.csv")
+
+AQ95 <- st_read("ProcessedData/aq2021.mkde95.shp") 
+
+AQ50 <- st_read("ProcessedData/aq2021.mkde50.shp")
+
+IV95 <- st_read("ProcessedData/iv2021.mkde95.shp")
+
+IV50 <- st_read("ProcessedData/iv2021.mkde50.shp")
+
+# Determine centroids of home ranges for mapping infection
+AQcent <- st_centroid(AQ95)
+IVcent <- st_centroid(IV95)
+```
+
+
+Read in behavioral observation annotations.
+
+```{r eval = F}
+bhav <- read.csv("Data/behave2021_updated.csv")
+
+# Calculate observation times
+follow.start <- bhav %>%
+  filter(Behavior == "START/STOP") %>%
+  filter(Status == "START") %>%
+  rename(Start = "Time") %>%
+  select(ID, Start)
+n_distinct(follow.start) #86
+
+follow.stop <- bhav %>%
+  filter(Behavior == "START/STOP") %>%
+  filter(Status == "STOP") %>%
+  rename(Stop = "Time") %>%
+  select(ID, Stop)
+n_distinct(follow.stop) #86
+
+follow.time <- left_join(follow.stop, follow.start) %>%
+  mutate(Follow.Time = (Stop - Start)/60) %>%
+  select(ID, Follow.Time) %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_")
+
+
+# Format behavioral data - create time stamps for each behavior
+
+# Start by creating a new data frame with the start times (time on watch in video) for each video observation
+starts <- bhav %>%
+  filter(Behavior == "Watch Time") %>%
+  select(ID, Time, Modifier.1) %>%
+  rename(WatchTime = Time, 
+         Watch = Modifier.1)
+
+starts$Watch <- as.POSIXct(starts$Watch, format="%H%M%S")
+starts$Watch <- format(starts$Watch, "%H:%M:%S")
+
+library(chron)
+
+beh.fin <- plyr::join(bhav, starts, by = "ID") %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_", remove = F) %>%
+  select(-Media.file.path, -Total.length, -FPS, -Subject, -Behavioral.category, -Comment)
+
+beh.fin$Time <- times(beh.fin$Time / (24 * 60 * 60))
+beh.fin$WatchTime <- times(beh.fin$WatchTime / (24 * 60 * 60))
+
+beh.fin$ActualTime <- beh.fin$Watch + (beh.fin$Time - beh.fin$WatchTime)
+```
+
+
+Next, combine the date and actual time columns and make it POSIXct
+
+```{r eval = F}
+beh.fin$Date <- as.Date(beh.fin$Date)
+
+beh.fin <- beh.fin %>% unite("time", c("Date", "ActualTime"), sep = " ", remove = F)
+
+beh.fin$time <- as.POSIXct(strptime(as.character(beh.fin$time), "%Y-%m-%d %H:%M:%S"))
+
+#Convert the actual times to UTC by adding 4 hours (EST is UTC-4 in spring/summer)
+beh.fin$time <- beh.fin$time + lubridate::hours(4)
+
+behavior <- beh.fin %>%
+  select(-Site, -Species, -Phase, -Date, -EndTime, -Watch, -WatchTime)
+```
+
+
+Compute bite rates and get cleaning time
+
+```{r eval = F}
+bites <- behavior %>%
+  filter(Behavior == "Bite") %>%
+  group_by(ID) %>%
+  summarise(N_bites = n()) %>%
+  ungroup() %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_")
+
+conflicts_prefer(dplyr::arrange)
+conflicts_prefer(dplyr::lag)
+
+# cleaning <- behavior %>%
+#   filter(Behavior == "Cleaning") %>%
+#   arrange(ID, time) %>%
+#   mutate(Duration = time - lag(time)) %>%
+#   filter(Status == "STOP") %>%
+#   group_by(ID) %>%
+#   summarise(N_clean = n(), 
+#             Dur_clean = as.numeric(sum(Duration))) %>%
+#   ungroup() %>%
+#   separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_")
+
+interact <- behavior %>%
+  filter(Behavior == "Parrotfish") %>%
+  arrange(ID, time) %>%
+  mutate(Duration = time - lag(time)) %>%
+  filter(Status == "STOP") %>%
+  group_by(ID) %>%
+  summarise(N_int = n(), 
+            Dur_int = as.numeric(sum(Duration))) %>%
+  ungroup() %>%
+  separate(ID, c("Site", "Species", "Phase", "Date", "EndTime"), sep = "_")
+```
+
+
+Merge behavioral and spatial data with parasite loads
+
+```{r eval = F}
+centroids <- rbind(AQcent, IVcent) %>% select(-ID)
+
+final.parasites <- centroids %>%
+  left_join(bites) %>%
+  left_join(cleaning) %>%
+  left_join(interact) %>%
+  left_join(parasites) %>%
+  left_join(follow.time) %>%
+  filter(!is.na(Total_load)) %>%
+  mutate(N_clean = ifelse(is.na(N_clean), 0, N_clean),
+         Dur_clean = ifelse(is.na(Dur_clean), 0, Dur_clean))
+
+st_write(final.parasites, "ProcessedData/final.parasites.shp") # Save as a shapefile
+```
+
+
+## Read in full data set
+
+```{r}
+final.parasites <- st_read("ProcessedData/final.parasites.shp")
+```
+
+
+## Map the infections
+
+```{r}
+AQ_SPA_SCT_HR <- ggplot() +
+  geom_sf(data = final.parasites %>% filter(Site == "AQ"), 
+          aes(color = Species, size = Total_load), linewidth = 0.5, alpha = 0.2) +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(577630, 577720), breaks = c(577635, 577675, 577715)) +
+  scale_y_continuous("Northing (m)", limits = c(1337440, 1337560), 
+                     breaks = c(1337420, 1337460, 1337500, 1337540, 1337580)) + 
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 10, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2)) +
+  labs(color = "Species", size = "Load") +
+  scale_color_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
+  annotate("text", x = 577705, y = 1337555, label = "Aquarius") +
+  guides(color = guide_legend(order = 1))
+AQ_SPA_SCT_HR
+
+#Save figure
+ggsave("Figures/Parasites/AQ_parasiteloads.png", plot = AQ_SPA_SCT_HR,
+       width = 4, height = 4, dpi = 300)
+
+IV_SPA_SCT_HR <- ggplot() +
+  geom_sf(data = final.parasites %>% filter(Site == "IV"), 
+          aes(color = Species, size = Total_load), linewidth = 0.5, alpha = 0.2) +
+  coord_sf(datum = st_crs(32619)) +
+  theme_classic() +
+  scale_x_continuous("Easting (m)", limits = c(578130, 578195), breaks = c(578140, 578165, 578190)) +
+  scale_y_continuous("Northing (m)", limits = c(1335260, 1335345), 
+                     breaks = c(1335265, 1335290, 1335315, 1335340)) +
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 10, color = "black"),
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 2)) +
+  labs(color = "Species", size = "Load") +
+  scale_color_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred"))  +
+  annotate("text", x = 578185, y = 1335340, label = "Invisibles") +
+  guides(color = guide_legend(order = 1))
+IV_SPA_SCT_HR
+
+ggsave("Figures/Parasites/IV_parasiteloads.png", plot = IV_SPA_SCT_HR,
+       width = 4, height = 4, dpi = 300)
+```
+
+
+Bites, parrotfish interactions, and cleaning as a function of infection
+
+```{r}
+# Bites
+
+spa.final.parasites <- final.parasites %>%
+  filter(Species == "Spaurofrenatum")
+
+bite.para.m <- glmmTMB(data = spa.final.parasites, N_bites ~ log(Total_load+1) + offset(log(Follow.Time)), family = "gaussian")
+test.bite.para <- simulateResiduals(fittedModel = bite.para.m, n = 250, plot = T)
+summary(bite.para.m)
+
+bites.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = N_bites/Follow.Time, color = Species)) +
+  geom_point(color = "darkred", alpha = 0.2) +
+  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
+  theme_classic() +
+  labs(x = "log(Parasite Load + 1)", y = expression(paste("Bites min" ^-1))) +
+  annotate("text", x = 3.5, y = 11.8, label = "log(Parasite Load+1)") +
+  annotate("text", x = 3.5, y = 11.5, label = "italic(p) == 0.16", parse = T)
+bites.p
+
+ggsave("Figures/Parasites/Spa_bites.png", plot = bites.p,
+       width = 4, height = 4, dpi = 300)
+
+# Parrotfish interactions
+
+# int.para.m <- glmmTMB(data = final.parasites, Dur_int ~ Species + log(Total_load+1) + 
+#                          offset(log(Follow.Time)), family = "gaussian")
+# test.int.para <- simulateResiduals(fittedModel = int.para.m, n = 250, plot = T)
+# summary(int.para.m)
+
+int.para.m <- glmmTMB(data = spa.final.parasites, Dur_int ~ log(Total_load+1) +
+                         offset(log(Follow.Time)), family = "gaussian")
+test.int.para <- simulateResiduals(fittedModel = int.para.m, n = 250, plot = T)
+summary(int.para.m)
+
+icount.para.m <- glmmTMB(data = spa.final.parasites, N_int ~ log(Total_load+1) +
+                         offset(log(Follow.Time)), family = "gaussian")
+test.icount.para <- simulateResiduals(fittedModel = icount.para.m, n = 250, plot = T)
+summary(icount.para.m)
+
+# int.dur.p <- ggplot(data = final.parasites, aes(x = log(Total_load+1), y = Dur_int)) +
+#   geom_point(aes(color = Species), alpha = 0.2) +
+#   geom_smooth(method = "lm", color = "black", fill = "black", alpha = 0.1) +
+#   scale_color_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
+#   theme_classic() +
+#   labs(x = "log(Parasite Load + 1)", y = "Total Interaction Duration (s)") +
+#   annotate("text", x = 2, y = 136, label = "log(Parasite Load+1)") +
+#   annotate("text", x = 2, y = 130, label = "italic(p) == 0.03", parse = T)
+# int.dur.p
+
+int.count.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = N_int)) +
+  geom_point(color = "darkred", alpha = 0.2) +
+  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
+  theme_classic() +
+  labs(x = "log(Parasite Load + 1)", y = "Interaction Counts")
+int.count.p
+
+int.dur.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = Dur_int)) +
+  geom_point(color = "darkred", alpha = 0.2) +
+  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
+  theme_classic() +
+  labs(x = "log(Parasite Load + 1)", y = "Total Interaction Duration (s)") +
+  annotate("text", x = 2, y = 136, label = "log(Parasite Load+1)") +
+  annotate("text", x = 2, y = 130, label = "italic(p) == 0.428", parse = T)
+int.dur.p
+
+ggsave("Figures/Parasites/int_duration.png", plot = int.dur.p,
+       width = 5, height = 4, dpi = 300)
+
+#Home range area
+
+# hr.para.m <- glmmTMB(data = final.parasites, area ~ Species*log(Total_load+1) + 
+#                        offset(log(Follow.Time)), family = "gaussian")
+# test.hr.para <- simulateResiduals(fittedModel = hr.para.m, n = 250, plot = T)
+# summary(hr.para.m)
+
+hr.para.m <- glmmTMB(data = spa.final.parasites, area ~ log(Total_load+1) + 
+                       offset(log(Follow.Time)), family = "gaussian")
+test.hr.para <- simulateResiduals(fittedModel = hr.para.m, n = 250, plot = T)
+summary(hr.para.m)
+
+# hr.p <- ggplot(data = final.parasites, aes(x = log(Total_load+1), y = area, color = Species)) +
+#   geom_point(alpha = 0.2) +
+#   geom_smooth(method = "lm", aes(fill = Species), alpha = 0.1) +
+#   theme_classic() +
+#   scale_color_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
+#   scale_fill_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
+#   labs(x = "log(Parasite Load + 1)", y = expression(paste("Home Range m" ^2))) +
+#   annotate("text", x = 2, y = 355, label = "Species:log(Parasite Load+1)") +
+#   annotate("text", x = 2, y = 343, label = "italic(p) == 0.002", parse = T)
+# hr.p
+
+hr.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = area)) +
+  geom_point(color = "darkred", alpha = 0.2) +
+  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
+  theme_classic() +
+  labs(x = "log(Parasite Load + 1)", y = expression(paste("Home Range Area" ^2))) +
+  annotate("text", x = 2, y = 355, label = "log(Parasite Load+1)") +
+  annotate("text", x = 2, y = 343, label = "italic(p) == 0.033", parse = T)
+hr.p
+
+ggsave("Figures/Parasites/homerange.png", plot = hr.p,
+       width = 5, height = 4, dpi = 300)
+```
+
+

@@ -1907,7 +1907,7 @@ aq.scv.pis.p2 <- ggplot() +
   theme(text=element_text(family="Arial"),
         axis.text = element_text(size = 10, color = "black"),
         axis.title = element_text(size = 12, color = "black"),
-        panel.border = element_rect(color = "black", fill=NA, size=2),
+        panel.border = element_rect(color = "black", fill=NA, linewidth = 2),
         legend.text = element_text(size = 10, color = "black"),
         legend.title = element_text(size = 12, color = "black")) +
   guides(fill = "none") +
@@ -2293,7 +2293,7 @@ Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’
 
 PWPP plot for visual analyses
 
-```{r}
+```{r eval = F}
 my.aes <- list(point = list(size = 0.5),
                segment = list(linewidth = 0.1))
 
@@ -2701,7 +2701,7 @@ Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’
 
 PWPP plots for visual analysis
 
-```{r}
+```{r eval = F}
 PHR95.resp.pwpp <- pwpp(full.PHR95.mm.resp, sort = F, values = T, aes = my.aes) + 
   theme_classic() +   
   scale_color_manual(values = wes.pal)+
@@ -2961,7 +2961,7 @@ Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’
  
 PWPP plots for visual analysis
 
-```{r}
+```{r eval = F}
 PHR50.resp.pwpp <- pwpp(full.PHR50.mm.resp, sort = F, values = T, aes = my.aes) + 
   theme_classic() +   
   scale_color_manual(values = wes.pal)+
@@ -3338,4 +3338,178 @@ TPIP.PHR50.p <- ggplot(TPIPovlp2.sum, aes(x=Species1, y=mPHR50, fill=Species1)) 
   scale_alpha_discrete(range = c(1, 0.5)) +
   scale_x_discrete(labels=c("Sct", "Scv", "Spa", "Spv"))
 TPIP.PHR50.p
+```
+
+
+
+
+# Analysis of interaction probabilties as a function of overlap
+
+```{r}
+tp.int.counts <- tot.pdist.counts %>%
+  ungroup() %>%
+  filter(Int.ID %in% c("TP-Conspecific", "TP-Heterospecific")) %>% 
+  mutate(Interacted = ifelse(N == 0, "0", "1")) %>%
+  rename(N.int = N) %>%
+  select(ID, Site, Int.ID, N.int, Interacted) %>%
+  mutate_at(vars(Interacted), as.numeric)
+
+# PHR.overlaps has all the overlap data
+
+neighboring.int <- PHR.overlaps %>%
+  mutate(Type = ifelse(Species1 == Species2, "Conspecific", "Heterospecific")) %>%
+  unite("Int.ID", c("Phase1", "Type"), sep = "-", remove = F) %>%
+  select(id1, Species1, Int.ID, SL1, HAR1, BA95, PHR95, PHR50) %>%
+  rename(ID = id1,
+         Species = Species1,
+         SL = SL1,
+         HAR = HAR1) %>%
+  separate(ID, c("ID", "file"), sep = "[.]", remove = T) %>%
+  select(-file) %>%
+  group_by(ID, Species, SL, HAR, Int.ID) %>%
+  summarise(N = n(),
+            mBA95 = mean(BA95),
+            cBA95 = sum(BA95),
+            mPHR95 = mean(PHR95),
+            cPHR95 = sum(PHR95),
+            mPHR50 = mean(PHR50),
+            cPHR50 = sum(PHR50)) %>%
+  ungroup() %>%
+  left_join(tp.int.counts) %>%
+  drop_na(N.int, Interacted)
+```
+
+Model BA95
+
+```{r}
+neighboring.int.con <- neighboring.int %>%
+  filter(Int.ID == "TP-Conspecific" & N.int > 0)
+
+cor.test(neighboring.int.con$mBA95, neighboring.int.con$N.int, method=c("pearson"))
+
+ggplot(data = neighboring.int.con, aes(x = mBA95, y = N.int)) +
+  geom_point()
+
+
+
+ba.int.m1 <- glmmTMB(data = neighboring.int %>% filter(Int.ID == "TP-Conspecific" & mBA95 > 0), Interacted ~ mBA95 + 
+                      (1|Site:ID), family = binomial())
+
+test.ba.int.m1 <- simulateResiduals(fittedModel = ba.int.m1, n = 250, plot = T) #looks good
+testDispersion(test.ba.int.m1) #meets dispersion assumptions
+testOutliers(test.ba.int.m1) #outlier test is not significant
+testZeroInflation(ba.int.m1) #no significant zero inflation
+
+#Stats
+summary(ba.int.m1)
+
+#set contrasts for type III unbalanced ANOVA
+options(contrasts = c("contr.sum", "contr.poly"))
+
+ba.int.m1.anova <- Anova(ba.int.m1, type = 3)
+ba.int.m1.anova
+
+neighboring.int.con <- neighboring.int %>% 
+  filter(Int.ID == "TP-Conspecific") 
+
+neighboring.int.con$fit = predict(ba.int.m1, type = 'response')
+
+ba.int.p <- ggplot(neighboring.int.con) + 
+  geom_point(aes(x = cBA95, y = Interacted, color = Int.ID)) +
+  stat_smooth(aes(x = cBA95, y = fit, color = Int.ID)) +
+  theme_classic() +
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 10, color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(color = "black"),
+        legend.position = "none") +
+  labs(x = "Spatial Overlap", y = "Probability of Interaction")
+ba.int.p
+
+# ggsave("Figures/StaticDynamic/XXXXX.png", plot = ba.int.p,
+#        width = 3.25, height = 4, dpi = 300)
+```
+
+Model PHR95
+
+```{r}
+PHR95.int.m <- glmmTMB(data = neighboring.int %>% filter(Int.ID == "TP-Conspecific"), Interacted ~ mPHR50 + 
+                         Species + (1|Site:ID), offset = log(N), family = binomial())
+
+test.PHR95.int.m <- simulateResiduals(fittedModel = PHR95.int.m, n = 250, plot = T) #looks good
+testDispersion(test.PHR95.int.m) #meets dispersion assumptions
+testOutliers(test.PHR95.int.m) #outlier test is not significant
+testZeroInflation(PHR95.int.m) #no significant zero inflation
+
+#Stats
+summary(PHR95.int.m)
+
+#set contrasts for type III unbalanced ANOVA
+options(contrasts = c("contr.sum", "contr.poly"))
+
+PHR95.int.m.anova <- Anova(PHR95.int.m, type = 3)
+PHR95.int.m.anova
+
+neighboring.int$fit2 <- predict(PHR95.int.m, type = 'response')
+
+PHR95.int.p <- ggplot(neighboring.int) + 
+  geom_point(aes(x = mPHR95, y = N.int, color = Int.ID)) +
+  geom_smooth(aes(x = mPHR95, y = fit2, color = Int.ID)) +
+  theme_classic() +
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 10, color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(color = "black"),
+        legend.position = "none") +
+  labs(x = "Spatial Overlap", y = "Counts")
+PHR95.int.p
+
+# ggsave("Figures/StaticDynamic/XXXXX.png", plot = PHR95.int.p,
+#        width = 3.25, height = 4, dpi = 300)
+```
+
+
+Model PHR50
+
+```{r}
+neighboring.int.red <- neighboring.int %>% filter(!(Species == "Spviride" & Int.ID == "TP-Conspecific"))
+
+PHR50.int.m <- glmmTMB(data = neighboring.int.red, 
+                       N.int ~ Species + Int.ID + mPHR50 + 
+                      (1|Site:ID), family = poisson())
+
+PHR50.int.m <- glmmTMB(data = neighboring.int.red, N.int ~ mPHR50:Int.ID + 
+                         Species + Int.ID + mPHR50 + 
+                      (1|Site:ID), family = poisson())
+
+test.PHR50.int.m <- simulateResiduals(fittedModel = PHR50.int.m, n = 250, plot = T) #looks good
+testDispersion(test.PHR50.int.m) #meets dispersion assumptions
+testOutliers(test.PHR50.int.m) #outlier test is not significant
+testZeroInflation(PHR50.int.m) #no significant zero inflation
+
+#Stats
+summary(PHR50.int.m)
+
+#set contrasts for type III unbalanced ANOVA
+options(contrasts = c("contr.sum", "contr.poly"))
+
+PHR50.int.m.anova <- Anova(PHR50.int.m, type = 3)
+PHR50.int.m.anova
+
+neighboring.int.red$fit3 <- predict(PHR50.int.m, type = 'response')
+
+PHR50.int.p <- ggplot(neighboring.int.red) + 
+  geom_point(aes(x = mPHR50, y = N.int, color = Int.ID)) +
+  stat_smooth(aes(x = mPHR50, y = fit3, color = Int.ID)) +
+  theme_classic() +
+  theme(axis.title = element_text(size = 12, color = "black"),
+        axis.text = element_text(size = 10, color = "black"),
+        axis.title.x = element_blank(),
+        axis.text.x = element_text(color = "black"),
+        legend.position = "none") +
+  labs(x = "Spatial Overlap", y = "Counts")
+PHR50.int.p
+
+# ggsave("Figures/StaticDynamic/XXXXX.png", plot = PHR95.int.p,
+#        width = 3.25, height = 4, dpi = 300)
 ```
