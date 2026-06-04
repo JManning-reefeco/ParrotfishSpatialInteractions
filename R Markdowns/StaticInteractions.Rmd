@@ -514,11 +514,16 @@ area.mkde$Date <- gsub("\\.", "-", area.mkde$Date)
 
 area.mkde <- area.mkde %>%
   full_join(sl.har.final) %>%
-  mutate(mass = ifelse(Species == "Spviride", 0.025*(mSL^2.921), #Bohnsack and Harper
-                       ifelse(Species == "Scvetula", 0.01445*(mSL^3.03), #Froese ET2014 J. Appl. Ichthyol. (FishBase Bayesian Est.)
-                              ifelse(Species == "Spaurofrenatum", 0.00468*(mSL^3.429), #Bohnsack and Harper
-                                     ifelse(Species == "Sctaeniopterus", 0.0135*(mSL^3.0), #Bohnsack and Harper
-                                            0.01096*(mSL^3.01)))))) %>% #Froese ET2014 (FishBase Bayesian Est.) Sc. iseri
+                #Bohnsack and Harper
+  mutate(mass = ifelse(Species == "Spviride", 0.025*(mSL^2.921), 
+                       #Froese ET2014 J. Appl. Ichthyol. (FishBase Bayesian Est.)
+                       ifelse(Species == "Scvetula", 0.01445*(mSL^3.03), 
+                              #Bohnsack and Harper
+                              ifelse(Species == "Spaurofrenatum", 0.00468*(mSL^3.429),
+                                     #Bohnsack and Harper
+                                     ifelse(Species == "Sctaeniopterus", 0.0135*(mSL^3.0),
+                                            #Froese ET2014 (FishBase Bayesian Est.) Sc. iseri
+                                            0.01096*(mSL^3.01)))))) %>% 
   rename(SL = mSL,
          Harem = mHarem)
 
@@ -1621,7 +1626,8 @@ tot.pdist.counts <- tot.pdist.analysis %>%
   replace(is.na(.), 0) %>%
   gather(key = Int.ID, value = N, `IP-Conspecific`:`TP-Heterospecific`)
   
-nb.c <- glmmTMB(N ~ Site + Species + Int.ID, offset = log(Follow.Time), family=nbinom2, data=tot.pdist.counts)
+nb.c <- glmmTMB(N ~ Site + Species + Int.ID, offset = log(Follow.Time), 
+                family=nbinom2, data=tot.pdist.counts)
 
 test.nb.c <- simulateResiduals(fittedModel = nb.c, n = 250, plot = T)
 testDispersion(test.nb.c) #dispersion was okay
@@ -1760,7 +1766,7 @@ alternative hypothesis: two.sided
 
 ```{r}
 #Plot
-int.counts.p <- ggplot(tot.pdist.counts, aes(x=Int.ID, y=N)) +
+int.counts.p <- ggplot(tot.pdist.counts, aes(x=Int.ID, y= N)) +
   geom_boxplot(outlier.size = 1, size = 0.5) +
   theme_classic(base_family = "Arial") +
   ylab("Counts") +
@@ -1936,14 +1942,18 @@ tot.pdist.summary
 
 #create sf object of all HRs (true, including holes) and CUs
 all.HRs.true <- rbind(aq.all.HR, iv.all.HR) %>%
-  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP") & Date > "2021-05-31")
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & 
+           Phase %in% c("TP") & 
+           Date > "2021-05-31")
 
 all.CUs <- rbind(aq.all.CU, iv.all.CU) %>%
   filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP") & Date > "2021-05-31")
 
 #remove holes to create buffers from outer edge
 all.HRs <- rbind(aq.all.HR, iv.all.HR) %>%
-  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & Phase %in% c("TP") & Date > "2021-05-31") %>%
+  filter(Species %in% c("Sctaeniopterus", "Scvetula", "Spaurofrenatum", "Spviride") & 
+           Phase %in% c("TP") & 
+           Date > "2021-05-31") %>%
   full_join(tot.pdist.summary) %>%
   st_remove_holes()
 
@@ -2040,12 +2050,12 @@ ivBA <- tibble::rownames_to_column(as.data.frame(ivBA), "id1")
 
 #convert to long format
 aqBA.l <- pivot_longer(aqBA, cols = c(2:ncol(aqBA)), names_to = "id2", values_to = "BA95")
-ivBA.l <- pivot_longer(ivBA, cols = c(2:ncol(ivBA)), names_to = "id2", values_to = "BA95")
+ivBA.l <- pivot_longer(as.data.frame(ivBA), cols = c(2:ncol(ivBA)), names_to = "id2", values_to = "BA95")
 
 overlap <- as.data.frame(rbind(aqBA.l, ivBA.l))
 overlap$BA95 <- overlap$BA95/0.95 #divide by 0.95 to make the proportions between 0 and 1
 
-overlap2 <- subset(overlap, (id1 != id2)) #remove overlap estimates of each individual with itself (all ~1; removes 170)
+overlap2 <- subset(overlap, (id1 != id2)) #remove self-overlap (all ~1; removes 170)
 overlap.nd <- overlap2[!duplicated(t(apply(overlap2, 1, sort))), ] #remove reciprocal comparisons (duplicates);1/2 the dataset
 
 overlap.n0 <- overlap.nd %>% 
@@ -2056,7 +2066,7 @@ overlap.n0 <- overlap.nd %>%
 ovlp <- overlap.n0 %>%
   separate(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_") %>%
   separate(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_") %>%
-  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column for the time between tracks
+  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create time between tracks
   mutate(diff.sl = abs(SL1 - SL2))
 
 write.csv(ovlp, "ProcessedData/HRoverlap.csv", row.names = F)
@@ -2070,11 +2080,11 @@ ovlpfin <- overlap2 %>%
   filter(BA95 > 0) %>%
   separate("id1", c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>% 
   separate("id2", c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
-  filter(!grepl("2021-05-", Date1) & !grepl("2021-05-", Date2)) %>% #remove initial tracks of Sp viride before June 2021
+  filter(!grepl("2021-05-", Date1) & !grepl("2021-05-", Date2)) %>% #remove Sp viride before June 2021
   filter(Species1 != "Sciseri" & Species2 != "Sciseri") %>% #remove Sc iseri tracks
   filter(Species1 != "Scguacamaia" & Species2 != "Scguacamaia") %>% #remove Sc guacamaia track
-  filter(Phase1 != "IP" & Phase2 != "IP") %>% #remove spatial interactions with IPs which will be treated elsewhere
-  filter(Phase1 != "NTP" & Phase2 != "NTP") %>% #remove the non-territorial floaters which will be treated elsewhere
+  filter(Phase1 != "IP" & Phase2 != "IP") %>% #remove spatial interactions with IPs 
+  filter(Phase1 != "NTP" & Phase2 != "NTP") %>% #remove the non-territorial floaters
   select(-c(2:6, 8:12))
 
 
@@ -2095,10 +2105,14 @@ neighboring.fin$days <- abs(difftime(as.Date(neighboring.fin$Date1), as.Date(nei
 
 neighboring.fin$Interaction <- as.factor(neighboring.fin$Interaction)
 
-mean(neighboring.fin$days)
-range(neighboring.fin$days)
-sd(neighboring.fin$days)
-nrow(neighboring.fin)
+mean(neighboring.fin$days) 
+#14.84 days apart on average
+range(neighboring.fin$days) 
+#0 - 44 days apart
+sd(neighboring.fin$days) 
+#14.76
+nrow(neighboring.fin) 
+#538
 ```
 
 
@@ -2112,10 +2126,14 @@ neighboring.sum <- neighboring.fin %>%
             HR.no = sum(BA95 == 0),
             HR.o.perc = HR.o/N)
 
-sum(neighboring.sum$N) #538, good
-mean(neighboring.sum$HR.o.perc) #75.9%
-range(neighboring.sum$HR.o.perc) #63.3-83.3% (Sc. taeniopterus - Sc. taeniopterus; Sp. aurofrenatum - Sp. aurofrenatum)
-range(1-neighboring.sum$HR.o.perc) #16.7-36.7% (Sp. aurofrenatum - Sp. aurofrenatum; Sc. taeniopterus - Sc. taeniopterus)
+sum(neighboring.sum$N) 
+#538, good
+mean(neighboring.sum$HR.o.perc) 
+#75.9%
+range(neighboring.sum$HR.o.perc) 
+#63.3-83.3% (Sc. taeniopterus - Sc. taeniopterus; Sp. aurofrenatum - Sp. aurofrenatum)
+range(1-neighboring.sum$HR.o.perc) 
+#16.7-36.7% (Sp. aurofrenatum - Sp. aurofrenatum; Sc. taeniopterus - Sc. taeniopterus)
 ```
 
 On average, 76% of neighboring pairs across all interaction types (range = 62-83%) had some degree of home range overlap. 
@@ -2396,14 +2414,15 @@ TPTP.BA.sum <- TPTP.BA95.props %>%
   full_join(TPTP.BA95.sum)
   
 
-BA95.hm <- ggplot(data = TPTP.BA.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mBA95), parse = F) +
+BA95.hm <- ggplot(data = TPTP.BA.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mBA95)) +
   geom_tile(color = "white") +
   scale_fill_gradient2(low = "white", high = "#1F78B4", limit = c(0,0.31), 
                        space = "Lab", name="Spatial\nOverlap", label = function(x) sprintf("%.2f", x)) +
   theme_classic() + 
   theme(axis.text.x = element_text(angle = 90, size = 10, face = "italic", color = "black", 
                                    hjust = 1, vjust = 0.5, family = "Arial"),
-       axis.text.y = element_text(size = 10, face = "italic", color = "black", vjust = 0.5, family = "Arial"),
+       axis.text.y = element_text(size = 10, face = "italic", color = "black", 
+                                  vjust = 0.5, family = "Arial"),
        axis.ticks = element_blank()) + 
   coord_fixed() +
   geom_text(aes(label = `BA95`, family = "Arial"), vjust = -1, size = 2.5) +
@@ -2440,14 +2459,14 @@ ivPHR95.l$Site <- "IV"
 
 PHR95overlap <- as.data.frame(rbind(aqPHR95.l, ivPHR95.l))
 
-PHR95overlap2 <- subset(PHR95overlap, (id1 != id2)) %>% #remove overlap estimates of each individual w/itself (all ~1; removes 170)
+PHR95overlap2 <- subset(PHR95overlap, (id1 != id2)) %>% #remove self-overlap (all ~1; removes 170)
   left_join(id1.sl.har) %>% #this adds the body size and harem size for each fish
   left_join(id2.sl.har) #this adds the body size and harem size for each fish
 
 PHR95ovlp <- PHR95overlap2 %>% 
   separate(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>%
   separate(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
-  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column for the time between tracks
+  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column fo time bw tracks
   mutate(diff.sl = abs(SL1 - SL2))
 ```
 
@@ -2474,14 +2493,14 @@ ivPHR50.l$Site <- "IV"
 
 PHR50overlap <- as.data.frame(rbind(aqPHR50.l, ivPHR50.l))
 
-PHR50overlap2 <- subset(PHR50overlap, (id1 != id2)) %>% #remove overlap estimates of each individual w/itself (all ~1; removes 170)
+PHR50overlap2 <- subset(PHR50overlap, (id1 != id2)) %>% #remove self-overlap (all ~1; removes 170)
   left_join(id1.sl.har) %>% #this adds the body size and harem size for each fish
   left_join(id2.sl.har) #this adds the body size and harem size for each fish
 
 PHR50ovlp <- PHR50overlap2 %>% 
   separate(id1, c("Site1", "Species1", "Phase1", "Date1", "EndTime1"), sep = "_", remove = F) %>%
   separate(id2, c("Site2", "Species2", "Phase2", "Date2", "EndTime2"), sep = "_", remove = F) %>%
-  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create a column for the time between tracks
+  mutate(days = abs(difftime(Date1, Date2 , units = c("days")))) %>% #create time between tracks
   mutate(diff.sl = abs(SL1 - SL2))
 ```
 
@@ -2506,12 +2525,17 @@ PHR.overlaps.sum <- PHR.overlaps %>%
             PHR95.o.perc = PHR95.o/N,
             PHR50.o.perc = PHR50.o/N)
 
-sum(PHR.overlaps.sum$N) #1076, good
-mean(PHR.overlaps.sum$PHR95.o.perc) #77%
-range(PHR.overlaps.sum$PHR95.o.perc) #63-83% (Sc. taeniopterus - Sc. taeniopterus; Sp. aurofrenatum - Sp. aurofrenatum)
+sum(PHR.overlaps.sum$N) 
+#1076, good
+mean(PHR.overlaps.sum$PHR95.o.perc) 
+#77%
+range(PHR.overlaps.sum$PHR95.o.perc) 
+#63-83% (Sc. taeniopterus - Sc. taeniopterus; Sp. aurofrenatum - Sp. aurofrenatum)
 
-mean(PHR.overlaps.sum$PHR50.o.perc) #27%
-range(PHR.overlaps.sum$PHR50.o.perc) #0-43% (Sp. viride - Sp. viride; Sp. aurofrenatum - Sc. vetula)
+mean(PHR.overlaps.sum$PHR50.o.perc) 
+#27%
+range(PHR.overlaps.sum$PHR50.o.perc) 
+#0-43% (Sp. viride - Sp. viride; Sp. aurofrenatum - Sc. vetula)
 ```
 
 
@@ -3083,7 +3107,7 @@ TPTP.PHR.sum <- TPTP.PHR.props %>%
 display.brewer.pal(12, "Reds")
 brewer.pal(12, "Reds") #use A50F15 for PHR95
 
-PHR95.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mPHR95), parse = F) +
+PHR95.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mPHR95)) +
   geom_tile(color = "white") +
   scale_fill_gradient2(low = "white", high = "#A50F15", limit = c(0,0.41), 
                        space = "Lab", name="Activity of 2\nin HR 1", label = function(x) sprintf("%.2f", x)) +
@@ -3100,7 +3124,7 @@ PHR95.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), S
   scale_y_discrete(labels=c("Sct", "Scv", "Spa", "Spv")) 
 PHR95.hm
 
-PHR50.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mPHR50), parse = F) +
+PHR50.hm <- ggplot(data = TPTP.PHR.sum, aes(reorder(Species2, desc(Species2)), Species1, fill = mPHR50)) +
   geom_tile(color = "white") +
   scale_fill_gradient2(low = "white", high = "#6A3D9A", na.value = "white", limit = c(0,0.21), 
                        space = "Lab", name="Activity of 2\nin CA 1") +
@@ -3141,7 +3165,7 @@ TPIPovlp <- ovlp %>%
   filter(!grepl("2021-05-", Date1) & !grepl("2021-05-", Date2)) %>% #remove Sp. viride prior to June
   filter(Species1 != "Scguacamaia" & Species2 != "Scguacamaia") %>% #remove Sc. guacamaia
   filter(Species1 != "Sciseri" & Species2 != "Sciseri") %>% #remove Sc. iseri
-  filter(Phase1 != "NTP" & Phase2 != "NTP") %>% #remove all non-territorial terminal phase which are treated elsewhere
+  filter(Phase1 != "NTP" & Phase2 != "NTP") %>% #remove all non-territorial terminal phase
   filter(Phase1 != Phase2) %>% #Want TP - IP interactions only
   filter(Species1 == Species2) %>% #intraspecific
   unite("Interaction", c("Species1", "Species2"), sep = " - ", remove = F) %>%
@@ -3343,7 +3367,15 @@ TPIP.PHR50.p
 
 
 
-# Analysis of interaction probabilties as a function of overlap
+
+
+
+
+
+
+
+
+# Analysis of interaction probabilties as a function of overlap (TOO FEW INTERACTIONS FOR THIS TO BE SUPER HELPFUL)
 
 ```{r}
 tp.int.counts <- tot.pdist.counts %>%
@@ -3373,31 +3405,66 @@ neighboring.int <- PHR.overlaps %>%
             mPHR95 = mean(PHR95),
             cPHR95 = sum(PHR95),
             mPHR50 = mean(PHR50),
-            cPHR50 = sum(PHR50)) %>%
+            cPHR50 = sum(PHR50),
+            maxPHR50 = max(PHR50)) %>%
   ungroup() %>%
-  left_join(tp.int.counts) %>%
+  left_join(tp.int.counts) 
   drop_na(N.int, Interacted)
+
+# Overlap (BA)
+  
+#Binomial
+ggplot(data = neighboring.int %>% filter(Int.ID == "TP-Heterospecific"), 
+       aes(x = mBA95, y = Interacted)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  theme_classic()
+
+#Negative Binomial
+ggplot(data = neighboring.int %>% filter(Interacted == 1), 
+       aes(x = mBA95, y = N.int)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "nbinom2")) +
+  theme_classic()
+
+# Overlap (PHR95)
+  
+#Binomial
+ggplot(data = neighboring.int, aes(x = mPHR95, y = Interacted, color = Int.ID)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  theme_classic()
+
+#Negative Binomial
+ggplot(data = neighboring.int %>% filter(Interacted == 1), aes(x = mPHR95, y = N.int, color = Int.ID)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "nbinom2")) +
+  theme_classic()
+
+#Overlap (PHR50)
+#Binomial
+ggplot(data = neighboring.int, aes(x = maxPHR50, y = Interacted, color = Int.ID)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "binomial")) +
+  theme_classic()
+
+#Negative Binomial
+ggplot(data = neighboring.int %>% filter(Interacted == 1), aes(x = maxPHR50, y = N.int, color = Int.ID)) +
+  geom_point() +
+  geom_smooth(method = "glm", method.args = list(family = "nbinom2")) +
+  theme_classic()
 ```
+
 
 Model BA95
 
 ```{r}
-neighboring.int.con <- neighboring.int %>%
-  filter(Int.ID == "TP-Conspecific" & N.int > 0)
+# Interaction probability
 
-cor.test(neighboring.int.con$mBA95, neighboring.int.con$N.int, method=c("pearson"))
-
-ggplot(data = neighboring.int.con, aes(x = mBA95, y = N.int)) +
-  geom_point()
-
-
-
-ba.int.m1 <- glmmTMB(data = neighboring.int %>% filter(Int.ID == "TP-Conspecific" & mBA95 > 0), Interacted ~ mBA95 + 
-                      (1|Site:ID), family = binomial())
+ba.int.m1 <- glmmTMB(data = neighboring.int, 
+                     Interacted ~ Species*mBA95 + Int.ID*mBA95 + Site, family = binomial())
 
 test.ba.int.m1 <- simulateResiduals(fittedModel = ba.int.m1, n = 250, plot = T) #looks good
-testDispersion(test.ba.int.m1) #meets dispersion assumptions
-testOutliers(test.ba.int.m1) #outlier test is not significant
 testZeroInflation(ba.int.m1) #no significant zero inflation
 
 #Stats
@@ -3409,22 +3476,39 @@ options(contrasts = c("contr.sum", "contr.poly"))
 ba.int.m1.anova <- Anova(ba.int.m1, type = 3)
 ba.int.m1.anova
 
-neighboring.int.con <- neighboring.int %>% 
-  filter(Int.ID == "TP-Conspecific") 
+# Interaction counts
 
-neighboring.int.con$fit = predict(ba.int.m1, type = 'response')
+ba.int.m2 <- glmmTMB(data = neighboring.int, 
+                     N.int ~ Species*mBA95 + Species*Int.ID + mBA95*Int.ID + (1|Site:ID), family = poisson())
 
-ba.int.p <- ggplot(neighboring.int.con) + 
-  geom_point(aes(x = cBA95, y = Interacted, color = Int.ID)) +
-  stat_smooth(aes(x = cBA95, y = fit, color = Int.ID)) +
-  theme_classic() +
-  theme(axis.title = element_text(size = 12, color = "black"),
-        axis.text = element_text(size = 10, color = "black"),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(color = "black"),
-        legend.position = "none") +
-  labs(x = "Spatial Overlap", y = "Probability of Interaction")
-ba.int.p
+test.ba.int.m2 <- simulateResiduals(fittedModel = ba.int.m2, n = 250, plot = T) #looks good
+testZeroInflation(ba.int.m2) #no significant zero inflation
+
+#Stats
+summary(ba.int.m2)
+
+#set contrasts for type III unbalanced ANOVA
+options(contrasts = c("contr.sum", "contr.poly"))
+
+ba.int.m2.anova <- Anova(ba.int.m2, type = 3)
+ba.int.m2.anova
+
+# # neighboring.int.con <- neighboring.int %>% 
+# #   filter(Int.ID %in% c("TP-Conspecific", "TP-Heterospecific")) 
+# 
+# neighboring.int.con$fit = predict(ba.int.m1, type = 'response')
+# 
+# ba.int.p <- ggplot(neighboring.int.con) + 
+#   geom_point(aes(x = cBA95, y = Interacted, color = Int.ID)) +
+#   stat_smooth(aes(x = cBA95, y = fit, color = Int.ID)) +
+#   theme_classic() +
+#   theme(axis.title = element_text(size = 12, color = "black"),
+#         axis.text = element_text(size = 10, color = "black"),
+#         axis.title.x = element_blank(),
+#         axis.text.x = element_text(color = "black"),
+#         legend.position = "none") +
+#   labs(x = "Spatial Overlap", y = "Probability of Interaction")
+# ba.int.p
 
 # ggsave("Figures/StaticDynamic/XXXXX.png", plot = ba.int.p,
 #        width = 3.25, height = 4, dpi = 300)
@@ -3433,83 +3517,42 @@ ba.int.p
 Model PHR95
 
 ```{r}
-PHR95.int.m <- glmmTMB(data = neighboring.int %>% filter(Int.ID == "TP-Conspecific"), Interacted ~ mPHR50 + 
-                         Species + (1|Site:ID), offset = log(N), family = binomial())
+# Interaction probability
 
-test.PHR95.int.m <- simulateResiduals(fittedModel = PHR95.int.m, n = 250, plot = T) #looks good
-testDispersion(test.PHR95.int.m) #meets dispersion assumptions
-testOutliers(test.PHR95.int.m) #outlier test is not significant
-testZeroInflation(PHR95.int.m) #no significant zero inflation
+phr95.int.m1 <- glmmTMB(data = neighboring.int, 
+                     Interacted ~ Species*mPHR95 + Species*Int.ID + mPHR95*Int.ID+ (1|Site:ID), family = binomial())
+
+test.phr95.int.m1 <- simulateResiduals(fittedModel = phr95.int.m1, n = 250, plot = T) #looks good
+testZeroInflation(phr95.int.m1) #no significant zero inflation
 
 #Stats
-summary(PHR95.int.m)
+summary(phr95.int.m1)
 
 #set contrasts for type III unbalanced ANOVA
 options(contrasts = c("contr.sum", "contr.poly"))
 
-PHR95.int.m.anova <- Anova(PHR95.int.m, type = 3)
-PHR95.int.m.anova
-
-neighboring.int$fit2 <- predict(PHR95.int.m, type = 'response')
-
-PHR95.int.p <- ggplot(neighboring.int) + 
-  geom_point(aes(x = mPHR95, y = N.int, color = Int.ID)) +
-  geom_smooth(aes(x = mPHR95, y = fit2, color = Int.ID)) +
-  theme_classic() +
-  theme(axis.title = element_text(size = 12, color = "black"),
-        axis.text = element_text(size = 10, color = "black"),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(color = "black"),
-        legend.position = "none") +
-  labs(x = "Spatial Overlap", y = "Counts")
-PHR95.int.p
-
-# ggsave("Figures/StaticDynamic/XXXXX.png", plot = PHR95.int.p,
-#        width = 3.25, height = 4, dpi = 300)
+phr95.int.m1.anova <- Anova(phr95.int.m1, type = 3)
+phr95.int.m1.anova
 ```
 
 
 Model PHR50
 
 ```{r}
-neighboring.int.red <- neighboring.int %>% filter(!(Species == "Spviride" & Int.ID == "TP-Conspecific"))
+# Interaction probability
 
-PHR50.int.m <- glmmTMB(data = neighboring.int.red, 
-                       N.int ~ Species + Int.ID + mPHR50 + 
-                      (1|Site:ID), family = poisson())
+phr50.int.m1 <- glmmTMB(data = neighboring.int, 
+                     Interacted ~ Species*mPHR50 + Species*Int.ID + mPHR50*Int.ID + Site, family = binomial())
 
-PHR50.int.m <- glmmTMB(data = neighboring.int.red, N.int ~ mPHR50:Int.ID + 
-                         Species + Int.ID + mPHR50 + 
-                      (1|Site:ID), family = poisson())
-
-test.PHR50.int.m <- simulateResiduals(fittedModel = PHR50.int.m, n = 250, plot = T) #looks good
-testDispersion(test.PHR50.int.m) #meets dispersion assumptions
-testOutliers(test.PHR50.int.m) #outlier test is not significant
-testZeroInflation(PHR50.int.m) #no significant zero inflation
+test.phr50.int.m1 <- simulateResiduals(fittedModel = phr50.int.m1, n = 250, plot = T) #looks good
+testZeroInflation(phr50.int.m1) #no significant zero inflation
 
 #Stats
-summary(PHR50.int.m)
+summary(phr50.int.m1)
 
 #set contrasts for type III unbalanced ANOVA
 options(contrasts = c("contr.sum", "contr.poly"))
 
-PHR50.int.m.anova <- Anova(PHR50.int.m, type = 3)
-PHR50.int.m.anova
-
-neighboring.int.red$fit3 <- predict(PHR50.int.m, type = 'response')
-
-PHR50.int.p <- ggplot(neighboring.int.red) + 
-  geom_point(aes(x = mPHR50, y = N.int, color = Int.ID)) +
-  stat_smooth(aes(x = mPHR50, y = fit3, color = Int.ID)) +
-  theme_classic() +
-  theme(axis.title = element_text(size = 12, color = "black"),
-        axis.text = element_text(size = 10, color = "black"),
-        axis.title.x = element_blank(),
-        axis.text.x = element_text(color = "black"),
-        legend.position = "none") +
-  labs(x = "Spatial Overlap", y = "Counts")
-PHR50.int.p
-
-# ggsave("Figures/StaticDynamic/XXXXX.png", plot = PHR95.int.p,
-#        width = 3.25, height = 4, dpi = 300)
+phr50.int.m1.anova <- Anova(phr50.int.m1, type = 3)
+phr50.int.m1.anova
 ```

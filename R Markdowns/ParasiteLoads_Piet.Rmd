@@ -52,6 +52,13 @@ conflict_prefer("contr.sum", "stats")
 conflict_prefer("id", "adehabitatLT")
 ```
 
+Species colors
+
+```{r}
+sct.color <- "#FCBBA1"
+spa.color <- "#980043"
+```
+
 
 ## Load data
 
@@ -95,7 +102,7 @@ IVcent <- st_centroid(IV95)
 Read in behavioral observation annotations.
 
 ```{r eval = F}
-bhav <- read.csv("Data/behave2021.csv")
+bhav <- read.csv("Data/behave2021_updated.csv")
 
 # Calculate observation times
 follow.start <- bhav %>%
@@ -204,24 +211,19 @@ centroids <- rbind(AQcent, IVcent) %>% select(-ID)
 
 final.parasites <- centroids %>%
   left_join(bites) %>%
-  left_join(cleaning) %>%
   left_join(interact) %>%
   left_join(parasites) %>%
   left_join(follow.time) %>%
-  filter(!is.na(Total_load)) %>%
-  mutate(N_clean = ifelse(is.na(N_clean), 0, N_clean),
-         Dur_clean = ifelse(is.na(Dur_clean), 0, Dur_clean))
+  filter(!is.na(Total_load))
 
-st_write(final.parasites, "ProcessedData/final.parasites.shp") # Save as a shapefile
+st_write(final.parasites, "ProcessedData/final.parasites.gpkg", driver = "GPKG", append = F) # Save as a shapefile
 ```
 
 
 ## Read in full data set
 
 ```{r}
-final.parasites <- st_read("ProcessedData/final.parasites.shp") %>% 
-  rename(Total_load = Totl_ld,
-         Follow.Time = Fllw_Tm)
+final.parasites <- st_read("ProcessedData/final.parasites.gpkg")
 ```
 
 
@@ -276,135 +278,134 @@ Bites, parrotfish interactions, and cleaning as a function of infection
 ```{r}
 # Bites
 
-spa.final.parasites <- final.parasites %>%
-  filter(Species == "Spaurofrenatum")
-
-bite.para.m <- glmmTMB(data = spa.final.parasites, N_bites ~ log(Total_load+1) + offset(log(Follow.Time)), family = "gaussian")
+bite.para.m <- glmmTMB(data = final.parasites, N_bites ~ Species*log(Total_load+1) + offset(log(Follow.Time)), family = "gaussian")
 test.bite.para <- simulateResiduals(fittedModel = bite.para.m, n = 250, plot = T)
 summary(bite.para.m)
 
-bites.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = N_bites/Follow.Time)) +
-  geom_point(color = "darkred", alpha = 0.2) +
-  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
+# Visualize
+
+new.bites <- final.parasites %>%
+  group_by(Species) %>%
+  reframe(Total_load = seq(min(Total_load), max(Total_load), by = 1)) %>%
+  ungroup() %>%
+  mutate(log_TL = log(Total_load + 1),
+         Follow.Time = median(final.parasites$Follow.Time)) #constant offset
+
+# 2. Predict from the model
+new.bites$predicted <- predict(
+  bite.para.m,
+  newdata = new.bites,
+  type = "response"
+)
+
+# Optional: add confidence intervals
+preds <- predict(
+  bite.para.m,
+  newdata = new.bites,
+  type = "response",
+  se.fit = TRUE
+)
+new.bites$lower <- preds$fit - 1.96 * preds$se.fit
+new.bites$upper <- preds$fit + 1.96 * preds$se.fit
+
+# 3. Plot
+bites.p <- ggplot() +
+  geom_point(data = final.parasites, aes(x = Total_load, y = N_bites, color = Species), alpha = 0.5) +
+  geom_line(data = new.bites, aes(x = Total_load, y = predicted, color = Species), size = 1) +
+  geom_ribbon(data = new.bites, aes(x = Total_load, ymin = lower, ymax = upper, fill = Species), alpha = 0.2, color = NA) +
+  labs(x = "Total Parasite Load", y = expression(paste("Pred. Bites ~20-min" ^-1))) +
   theme_classic() +
-  labs(x = "log(Parasite Load + 1)", y = expression(paste("Bites min" ^-1))) +
-  annotate("text", x = 3.5, y = 11.8, label = "log(Parasite Load+1)") +
-  annotate("text", x = 3.5, y = 11.5, label = "italic(p) == 0.16", parse = T)
+  scale_color_manual(values = c(sct.color, spa.color)) +
+  scale_fill_manual(values = c(sct.color, spa.color)) +
+  guides(fill = "none")
 bites.p
 
-ggsave("Figures/Parasites/Spa_bites.png", plot = bites.p,
+ggsave("Figures/Parasites/bites.png", plot = bites.p,
        width = 4, height = 4, dpi = 300)
 
 # Parrotfish interactions
 
-int.para.m <- glmmTMB(data = final.parasites, Dur_int ~ Species + log(Total_load+1) +
+int.para.m <- glmmTMB(data = final.parasites, Dur_int ~ Species*log(Total_load+1) +
                          offset(log(Follow.Time)), family = "gaussian")
 test.int.para <- simulateResiduals(fittedModel = int.para.m, n = 250, plot = T)
 summary(int.para.m)
 
-# int.para.m <- glmmTMB(data = spa.final.parasites, Dur_int ~ log(Total_load+1) +
-#                          offset(log(Follow.Time)), family = "gaussian")
-# test.int.para <- simulateResiduals(fittedModel = int.para.m, n = 250, plot = T)
-# summary(int.para.m)
+# Visualize
 
+new.ints <- final.parasites %>%
+  group_by(Species) %>%
+  reframe(Total_load = seq(min(Total_load), max(Total_load), by = 1)) %>%
+  ungroup() %>%
+  mutate(log_TL = log(Total_load + 1),
+         Follow.Time = median(final.parasites$Follow.Time)) #constant offset
 
-newdf.int <- with(final.parasites,
-                  data.frame(Total_load = seq(min(Total_load),
-                                              max(Total_load),
-                                              length = 2000),
-                            handling_time_min = mean(handling_time_min),
-                            Temp = mean(Temp)))
+new.ints$predicted <- predict(
+  int.para.m,
+  newdata = new.ints,
+  type = "response"
+)
 
-predict.dn <- predict(dn.glm, newdata = newdf.dn,
-              type = "response", se.fit = TRUE)
+preds.int <- predict(
+  int.para.m,
+  newdata = new.ints,
+  type = "response",
+  se.fit = TRUE
+)
+new.ints$lower <- preds.int$fit - 1.96 * preds.int$se.fit
+new.ints$upper <- preds.int$fit + 1.96 * preds.int$se.fit
 
-newdf.dn2 <- cbind(newdf.dn, as.data.frame(predict.dn))
-newdf.dn2 <- transform(newdf.dn2,
-                   upper = fit + (1.96*se.fit),
-                   lower = fit - (1.96*se.fit))
-  
-#This is a plot of the effect of time from release on the number of dives per 30 mins averaged over the effect of temperature (binned over 30 mins also) and handling time.
-
-dives.rt.p <- ggplot() +
-  geom_point(aes(x = from_release_min, y = N),
-             data = dive.bin, size = 1, color = "black", fill = "white", pch = 21, alpha = 0.2) +
-  geom_ribbon(data = newdf.dn2, aes(ymin = lower, ymax = upper, x = from_release_min),
-              alpha = 0.1, color = "black", lwd = 0.25) +
-  geom_line(data = newdf.dn2, aes(x = from_release_min, y = fit), color = "#782F40", lwd = 1) +
-  labs(x = "Time From Release (min)",
-       y =  expression("Dives 30 min " ^-1)) +
+ints.p <- ggplot() +
+  geom_point(data = final.parasites, aes(x = Total_load, y = Dur_int, color = Species), alpha = 0.5) +
+  geom_line(data = new.ints, aes(x = Total_load, y = predicted, color = Species), size = 1) +
+  geom_ribbon(data = new.ints, aes(x = Total_load, ymin = lower, ymax = upper, fill = Species), alpha = 0.2, color = NA) +
+  labs(x = "Total Parasite Load", y = expression(paste("Pred. Aggression ~20-min" ^-1))) +
   theme_classic() +
-  theme(legend.position = "none",
-        axis.title = element_text(size = 12, color = "black", family = "Arial"),
-        axis.text = element_text(size = 10, color = "black", family = "Arial")) +
-  scale_x_continuous(limits = c(0,360))
-dives.rt.p
+  scale_color_manual(values = c(sct.color, spa.color)) +
+  scale_fill_manual(values = c(sct.color, spa.color)) +
+  guides(fill = "none")
+ints.p
 
-
-icount.para.m <- glmmTMB(data = spa.final.parasites, N_int ~ log(Total_load+1) +
-                         offset(log(Follow.Time)), family = "gaussian")
-test.icount.para <- simulateResiduals(fittedModel = icount.para.m, n = 250, plot = T)
-summary(icount.para.m)
-
-# int.dur.p <- ggplot(data = final.parasites, aes(x = log(Total_load+1), y = Dur_int)) +
-#   geom_point(aes(color = Species), alpha = 0.2) +
-#   geom_smooth(method = "lm", color = "black", fill = "black", alpha = 0.1) +
-#   scale_color_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
-#   theme_classic() +
-#   labs(x = "log(Parasite Load + 1)", y = "Total Interaction Duration (s)") +
-#   annotate("text", x = 2, y = 136, label = "log(Parasite Load+1)") +
-#   annotate("text", x = 2, y = 130, label = "italic(p) == 0.03", parse = T)
-# int.dur.p
-
-int.count.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = N_int)) +
-  geom_point(color = "darkred", alpha = 0.2) +
-  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
-  theme_classic() +
-  labs(x = "log(Parasite Load + 1)", y = "Interaction Counts")
-int.count.p
-
-int.dur.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = Dur_int)) +
-  geom_point(color = "darkred", alpha = 0.2) +
-  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
-  theme_classic() +
-  labs(x = "log(Parasite Load + 1)", y = "Total Interaction Duration (s)") +
-  annotate("text", x = 2, y = 136, label = "log(Parasite Load+1)") +
-  annotate("text", x = 2, y = 130, label = "italic(p) == 0.428", parse = T)
-int.dur.p
-
-ggsave("Figures/Parasites/int_duration.png", plot = int.dur.p,
+ggsave("Figures/Parasites/int_duration.png", plot = ints.p,
        width = 5, height = 4, dpi = 300)
 
 #Home range area
 
-# hr.para.m <- glmmTMB(data = final.parasites, area ~ Species*log(Total_load+1) + 
-#                        offset(log(Follow.Time)), family = "gaussian")
-# test.hr.para <- simulateResiduals(fittedModel = hr.para.m, n = 250, plot = T)
-# summary(hr.para.m)
-
-hr.para.m <- glmmTMB(data = spa.final.parasites, area ~ log(Total_load+1) + 
+hr.para.m <- glmmTMB(data = final.parasites, area ~ Species*log(Total_load+1) + 
                        offset(log(Follow.Time)), family = "gaussian")
 test.hr.para <- simulateResiduals(fittedModel = hr.para.m, n = 250, plot = T)
 summary(hr.para.m)
 
-# hr.p <- ggplot(data = final.parasites, aes(x = log(Total_load+1), y = area, color = Species)) +
-#   geom_point(alpha = 0.2) +
-#   geom_smooth(method = "lm", aes(fill = Species), alpha = 0.1) +
-#   theme_classic() +
-#   scale_color_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
-#   scale_fill_manual(labels = c("Princess", "Redband"), values = c("navy", "darkred")) +
-#   labs(x = "log(Parasite Load + 1)", y = expression(paste("Home Range m" ^2))) +
-#   annotate("text", x = 2, y = 355, label = "Species:log(Parasite Load+1)") +
-#   annotate("text", x = 2, y = 343, label = "italic(p) == 0.002", parse = T)
-# hr.p
+new.hr <- final.parasites %>%
+  group_by(Species) %>%
+  reframe(Total_load = seq(min(Total_load), max(Total_load), by = 1)) %>%
+  ungroup() %>%
+  mutate(log_TL = log(Total_load + 1),
+         Follow.Time = median(final.parasites$Follow.Time)) #constant offset
 
-hr.p <- ggplot(data = spa.final.parasites, aes(x = log(Total_load+1), y = area)) +
-  geom_point(color = "darkred", alpha = 0.2) +
-  geom_smooth(method = "lm", color = "darkred", fill = "darkred", alpha = 0.1) +
+new.hr$predicted <- predict(
+  hr.para.m,
+  newdata = new.hr,
+  type = "response"
+)
+
+preds.hr <- predict(
+  hr.para.m,
+  newdata = new.hr,
+  type = "response",
+  se.fit = TRUE
+)
+new.hr$lower <- preds.hr$fit - 1.96 * preds.hr$se.fit
+new.hr$upper <- preds.hr$fit + 1.96 * preds.hr$se.fit
+
+hr.p <- ggplot() +
+  geom_point(data = final.parasites, aes(x = Total_load, y = area, color = Species), alpha = 0.5) +
+  geom_line(data = new.hr, aes(x = Total_load, y = predicted, color = Species), size = 1) +
+  geom_ribbon(data = new.hr, aes(x = Total_load, ymin = lower, ymax = upper, fill = Species), alpha = 0.2, color = NA) +
+  labs(x = "Total Parasite Load", y = expression(paste("Pred. ~20-min Home Range Area (m" ^2, ")"))) +
   theme_classic() +
-  labs(x = "log(Parasite Load + 1)", y = expression(paste("Home Range Area (m" ^2, ")"))) +
-  annotate("text", x = 2, y = 355, label = "log(Parasite Load+1)") +
-  annotate("text", x = 2, y = 343, label = "italic(p) == 0.033", parse = T)
+  scale_color_manual(values = c(sct.color, spa.color)) +
+  scale_fill_manual(values = c(sct.color, spa.color)) +
+  guides(fill = "none")
 hr.p
 
 ggsave("Figures/Parasites/homerange.png", plot = hr.p,

@@ -55,6 +55,12 @@ conflict_prefer("contr.sum", "stats")
 
 ## Read in all CSV files - Initial
 
+In the new data set:
+
+AQ_Sctaeniopterus_TP_2021-06-14_135125: The file name and video name in file path matched, but Observation id was wrong. So, Iv changed the Observation id in the raw file. 
+
+For AQ_Sctaeniopterus_TP_2021-06-14_104539 there are no bites recorded
+
 ```{r}
 files <- dir(path = "Data/bites_sct_new", pattern = "\\.csv", full.names = T)
 out <- lapply(files, function(x) read.csv(x))
