@@ -420,7 +420,7 @@ corr.tot.sc.p <- ggplot(tl.sc) +
   coord_equal() + # Ensures axes have the same scale
   scale_x_continuous(limits = c(0,4.75)) +
   scale_y_continuous(limits = c(0,4.75)) +
-  labs(x = "R1: log(BSS Count + 1)", y = "R2: log(BSS Count + 1)") + 
+  labs(x = "R1: ln(BSS Count + 1)", y = "R2: ln(BSS Count + 1)") + 
   theme_classic() + 
   annotate("text", x = 0, y = 4.5, label = "ICC = 0.925 (0.856-0.962)", color = "black", hjust = 0)
 corr.tot.sc.p
@@ -465,7 +465,7 @@ corr.tot.sp.p <- ggplot(tl.sp) +
   coord_equal() + # Ensures axes have the same scale
   scale_x_continuous(limits = c(0,4.75)) +
   scale_y_continuous(limits = c(0,4.75)) +
-  labs(x = "R1: log(BSS Count + 1)", y = "R2: log(BSS Count + 1)") +
+  labs(x = "R1: ln(BSS Count + 1)", y = "R2: ln(BSS Count + 1)") +
   theme_classic() +
   annotate("text", x = 0, y = 4.5, label = "ICC = 0.982 (0.956-0.993)", color = "black", hjust = 0)
 corr.tot.sp.p
@@ -759,7 +759,7 @@ bites.p <- ggplot() +
             linewidth = 1) +
   geom_ribbon(data = new.bites, aes(x = logTL, ymin = lower, ymax = upper, fill = Species), 
               alpha = 0.2, color = NA) +
-  labs(x = "log(BSS Lessions + 1)", y = expression(paste("Bites 20-min"^-1))) +
+  labs(x = "ln(BSS Lessions + 1)", y = expression(paste("Bites 20-min"^-1))) +
   theme_classic() +
   scale_color_manual(values = c(sct.color, spa.color), 
                      label = c(expression(italic("Sc. taeniopterus")), 
@@ -884,7 +884,7 @@ ints.p <- ggplot() +
             linewidth = 1) +
   geom_ribbon(data = new.ints, aes(x = logTL, ymin = lower, ymax = upper, fill = Species), 
               alpha = 0.2, color = NA) +
-  labs(x = "log(BSS Lesions + 1)", y = expression(paste("Agonisms 20-min"^-1))) +
+  labs(x = "ln(BSS Lesions + 1)", y = expression(paste("Agonisms 20-min"^-1))) +
   theme_classic() +
   scale_color_manual(values = c(sct.color, spa.color), 
                      label = c(expression(italic("Sc. taeniopterus")), 
@@ -937,6 +937,7 @@ ints.p2 <- ggplot() +
   scale_color_manual(values = c(sct.color, spa.color), 
                      label = c(expression(italic("Sc. taeniopterus")), 
                                expression(italic("Sp. aurofrenatum")))) +
+  scale_x_discrete(labels = c("Aquarius", "Invisibles")) +
   scale_fill_manual(values = c(sct.color, spa.color)) +
   guides(color = "none", 
          fill = "none") +
@@ -1004,7 +1005,7 @@ hr.p <- ggplot() +
             linewidth = 1) +
   geom_ribbon(data = new.hr, aes(x = logTL, ymin = lower, ymax = upper, fill = Species), 
               alpha = 0.2, color = NA) +
-  labs(x = "log(BSS Lesions + 1)", y = expression(paste("Foraging Area (m"^2~")"))) +
+  labs(x = "ln(BSS Lesions + 1)", y = expression(paste("Foraging Area (m"^2~")"))) +
   theme_classic() +
   scale_color_manual(values = c(sct.color, spa.color), 
                      label = c(expression(italic("Sc. taeniopterus")), 
@@ -1058,6 +1059,7 @@ hr.p2 <- ggplot() +
   scale_color_manual(values = c(sct.color, spa.color), 
                      label = c(expression(italic("Sc. taeniopterus")), 
                                expression(italic("Sp. aurofrenatum")))) +
+  scale_x_discrete(labels = c("Aquarius", "Invisibles")) +
   scale_fill_manual(values = c(sct.color, spa.color)) +
   guides(color = "none", 
          fill = "none") +
@@ -1075,6 +1077,7 @@ hr.m.p
 ggsave("Figures/Parasites/hr.results.png", plot = hr.m.p,
        width = 6.5, height = 3, dpi = 300)
 ```
+
 
 
 
