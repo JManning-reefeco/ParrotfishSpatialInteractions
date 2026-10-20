@@ -1231,6 +1231,8 @@ ggplot(data = sim.bites.eq %>% filter(Species == "Sctaeniopterus"),
 
 
 ```{r}
+library(purrr)
+
 set.seed(123)
 nsim <- 1000
 
@@ -1252,6 +1254,7 @@ bites.grps$se  <- preds.sim$se.fit
 
 
 # Monte Carlo simulations
+
 
 sim.results <- map(seq_len(nsim), function(i) {
 
