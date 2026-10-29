@@ -318,8 +318,8 @@ corr.sc.p <- ggplot(final.parasites %>% filter(Species == "Sctaeniopterus")) +
   annotate("text", x = 0, y = 84, label = "WS r = 0.99, p < 0.001", color = "grey", hjust = 0)
 corr.sc.p
 
-ggsave("Figures/Parasites/obs_corr_sc_infect.png", plot = corr.sc.p,
-       width = 3.25, height = 3.25, dpi = 300)
+# ggsave("Figures/Parasites/obs_corr_sc_infect.png", plot = corr.sc.p,
+#        width = 3.25, height = 3.25, dpi = 300)
 
 #Sp aurofrenatum
 
@@ -351,8 +351,8 @@ corr.sp.p <- ggplot(final.parasites %>% filter(Species == "Spaurofrenatum")) +
   annotate("text", x = 0, y = 44, label = "WS r = 0.98, p < 0.001", color = "grey45", hjust = 0)
 corr.sp.p
 
-ggsave("Figures/Parasites/obs_corr_sp_infect.png", plot = corr.sp.p,
-       width = 3.25, height = 3.25, dpi = 300)
+# ggsave("Figures/Parasites/obs_corr_sp_infect.png", plot = corr.sp.p,
+#        width = 3.25, height = 3.25, dpi = 300)
 
 
 parasites.inf <- final.parasites %>%
@@ -413,16 +413,17 @@ cor.test(tl.sc$TL1_log1p, tl.sc$TL2_log1p,
 
 corr.tot.sc.p <- ggplot(tl.sc) +
   geom_abline(slope = 1, intercept = 0, 
-              lty = "dashed", color = "grey35", linewidth = 1) + # 1:1 Reference line
+              lty = "dashed", color = "black", linewidth = 1) + # 1:1 Reference line
   # geom_smooth(aes(x = TL1_log1p, y = TL2_log1p), color = "black", fill = "black",
   #             linewidth = 0.75, method = "lm", se = F) +
-  geom_point(aes(x = TL1_log1p, y = TL2_log1p), shape = 16, color = "black", size = 2) +
+  geom_point(aes(x = TL1_log1p, y = TL2_log1p), shape = 16, color = sct.color, size = 2) +
   coord_equal() + # Ensures axes have the same scale
   scale_x_continuous(limits = c(0,4.75)) +
   scale_y_continuous(limits = c(0,4.75)) +
-  labs(x = "R1: ln(BSS Count + 1)", y = "R2: ln(BSS Count + 1)") + 
-  theme_classic() + 
-  annotate("text", x = 0, y = 4.5, label = "ICC = 0.925 (0.856-0.962)", color = "black", hjust = 0)
+  labs(x = "Reviewer 1 \nln(BSS Count + 1)", y = "Reviewer 2 \nln(BSS Count + 1)") + 
+  theme_classic() +
+  annotate("text", x = 0, y = 4.75, label = "Sc. taeniopterus", fontface = "italic", color = "black", hjust = 0) +
+  annotate("text", x = 0, y = 4.4, label = "ICC = 0.925 (0.856-0.962)", color = "black", hjust = 0)
 corr.tot.sc.p
 
 
@@ -459,15 +460,14 @@ cor.test(tl.sp$TL1_log1p, tl.sp$TL2_log1p,
 corr.tot.sp.p <- ggplot(tl.sp) +
   geom_abline(slope = 1, intercept = 0, 
               lty = "dashed", color = "grey35", linewidth = 1) + # 1:1 Reference line
-  # geom_smooth(aes(x = TL1, y = TL2), color = "black", fill = "black",
-  #             linewidth = 0.75, method = "lm", se = T) +
-  geom_point(aes(x = TL1_log1p, y = TL2_log1p), shape = 16, color = "black", size = 2) +
+  geom_point(aes(x = TL1_log1p, y = TL2_log1p), shape = 16, color = spa.color, size = 2) +
   coord_equal() + # Ensures axes have the same scale
   scale_x_continuous(limits = c(0,4.75)) +
   scale_y_continuous(limits = c(0,4.75)) +
-  labs(x = "R1: ln(BSS Count + 1)", y = "R2: ln(BSS Count + 1)") +
+  labs(x = "Reviewer 1 \nln(BSS Count + 1)", y = "Reviewer 2 \nln(BSS Count + 1)") + 
   theme_classic() +
-  annotate("text", x = 0, y = 4.5, label = "ICC = 0.982 (0.956-0.993)", color = "black", hjust = 0)
+  annotate("text", x = 0, y = 4.75, label = "Sp. aurofrenatum", fontface = "italic", color = "black", hjust = 0) +
+  annotate("text", x = 0, y = 4.4, label = "ICC = 0.982 (0.956-0.993)", color = "black", hjust = 0)
 corr.tot.sp.p
 
 corr.p <- ggarrange(corr.tot.sc.p, corr.tot.sp.p,
@@ -476,179 +476,8 @@ corr.p <- ggarrange(corr.tot.sc.p, corr.tot.sp.p,
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 corr.p
 
-ggsave("Figures/Parasites/obs_corr_infect.png", plot = corr.p,
-       width = 6.5, height = 3.25, dpi = 300)
-```
-
-
-## Let's do a more formal concordance correlation analysis
-
-```{r eval = F}
-library(iccCounts) 
-
-# Total counts
-
-# Sc. taeniopterus
-
-parasites.sc.long.tot <- parasites.sc %>% 
-  st_drop_geometry() %>%
-  unite("id", c(Site:EndTime), sep = "_") %>%
-  select(id, WS1, WS2, BS1c, BS2c) %>%
-  mutate(Tot1 = WS1 + BS1c,
-         Tot2 = WS2 + BS2c) %>%
-  select(id, Tot1, Tot2) %>%
-  gather(key = "rev", value = "count", c(Tot1:Tot2))
-
-
-sc.tot.pois1a <- icc_counts(data = parasites.sc.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "poisson")
-sc.tot.pois1b <-icc_counts(data = parasites.sc.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zip")
-# sc.tot.nb1a <- icc_counts(data = parasites.sc.long.tot,
-#                           y = "count", id = "id", met = "rev", type = "con",
-#                           fam = "nbinom1")
-# sc.tot.nb1b <-icc_counts(data = parasites.sc.long.tot,
-#                            y = "count", id = "id", met = "rev", type = "con",
-#                            fam = "zinb1")
-# sc.tot.nb2a <- icc_counts(data = parasites.sc.long.tot,
-#                           y = "count", id = "id", met = "rev", type = "con",
-#                           fam = "nbinom2")
-# sc.tot.nb2b <-icc_counts(data = parasites.sc.long.tot,
-#                            y = "count", id = "id", met = "rev", type = "con",
-#                            fam = "zinb2")
-
-# model convergence issues on all of the negative binomial models
-
-AIC(sc.tot.pois1a$model, sc.tot.pois1b$model)
-
-# , 
-#     sc.tot.nb1a$model, sc.tot.nb1b$model, 
-#     sc.tot.nb2a$model, sc.tot.nb2b$model)
-
-# poisson model best fit anyway
-
-summary(sc.tot.pois1a$model)
-ICC(sc.tot.pois1a)
-
-set.seed(100)
-sc.tot.pois1a.gof <- GOF_check(sc.tot.pois1a) # this is slow FYI and can fail (up seed?)
-
-plot(sc.tot.pois1a.gof, type = "envelope") # some points out of envelope, mostly at lower end
-plot(sc.tot.pois1a.gof, type = "dispersion") 
-DispersionTest(sc.tot.pois1a.gof) # good
-plot(sc.tot.pois1a.gof, type = "zeros") 
-ZeroTest(sc.tot.pois1a.gof) # good
-
-
-# Sp aurofrenatum
-
-parasites.sp.long.tot <- parasites.sp %>% 
-  unite("id", c(Site:EndTime), sep = "_") %>%
-  select(id, WS1, WS2, BS1c, BS2c) %>%
-  mutate(Tot1 = WS1 + BS1c,
-         Tot2 = WS2 + BS2c) %>%
-  select(id, Tot1, Tot2) %>%
-  gather(key = "rev", value = "count", c(Tot1:Tot2))
-
-
-sp.tot.pois1a <- icc_counts(data = parasites.sp.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "poisson")
-sp.tot.pois1b <-icc_counts(data = parasites.sp.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zip")
-sp.tot.nb1a <- icc_counts(data = parasites.sp.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "nbinom1")
-sp.tot.nb1b <-icc_counts(data = parasites.sp.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zinb1")
-sp.tot.nb2a <- icc_counts(data = parasites.sp.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "nbinom2")
-sp.tot.nb2b <-icc_counts(data = parasites.sp.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zinb2")
-
-# model convergence issues on all of the negative binomial models
-
-AIC(sp.tot.pois1a$model, sp.tot.pois1b$model)
-    
-    # , 
-    # sp.tot.nb1a$model, sp.tot.nb1b$model, 
-    # sp.tot.nb2a$model, sp.tot.nb2b$model)
-
-# poisson model best fit anyway
-
-summary(sp.tot.pois1a$model)
-ICC(sp.tot.pois1a)
-
-set.seed(100)
-sp.tot.pois1a.gof <- GOF_check(sp.tot.pois1a) # this is slow FYI and can fail (up seed?)
-
-plot(sp.tot.pois1a.gof, type = "envelope") # points out of envelope
-plot(sp.tot.pois1a.gof, type = "dispersion") 
-DispersionTest(sp.tot.pois1a.gof) # good
-plot(sp.tot.pois1a.gof, type = "zeros") 
-ZeroTest(sp.tot.pois1a.gof) # good
-
-
-# Merge both species into one due to lack of sample size...
-
-parasites.long.tot <- rbind(parasites.sc.long.tot, parasites.sp.long.tot)
-
-
-tot.pois1a <- icc_counts(data = parasites.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "poisson")
-tot.pois1b <-icc_counts(data = parasites.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zip")
-tot.nb1a <- icc_counts(data = parasites.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "nbinom1")
-tot.nb1b <-icc_counts(data = parasites.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zinb1")
-tot.nb2a <- icc_counts(data = parasites.long.tot,
-                          y = "count", id = "id", met = "rev", type = "con",
-                          fam = "nbinom2")
-tot.nb2b <-icc_counts(data = parasites.long.tot,
-                           y = "count", id = "id", met = "rev", type = "con",
-                           fam = "zinb2")
-
-# model convergence issues on all of the negative binomial models
-
-AIC(tot.pois1a$model, tot.pois1b$model)
-
-# poisson model best fit anyway
-
-summary(tot.pois1a$model)
-ICC(tot.pois1a)
-
-set.seed(100)
-tot.pois1a.gof <- GOF_check(tot.pois1a) # this is slow FYI and can fail (up seed?)
-
-plot(tot.pois1a.gof, type = "envelope") # some points out of envelope
-plot(tot.pois1a.gof, type = "dispersion") 
-DispersionTest(tot.pois1a.gof) # good
-plot(tot.pois1a.gof, type = "zeros") 
-ZeroTest(tot.pois1a.gof) # good
-
-
-# Now we could split to check for black spots and white spots...
-
-parasites.sc.long.ws <- parasites.sc %>% 
-  unite("id", c(Site:EndTime), sep = "_") %>%
-  select(id, WS1, WS2) %>%
-  gather(key = "rev", value = "count", c(WS1:WS2))
-
-parasites.sc.long.bs <- parasites.sc %>% 
-  unite("id", c(Site:EndTime), sep = "_") %>%
-  select(id, BS1c, BS2c) %>%
-  gather(key = "rev", value = "count", c(BS1c:BS2c))
+# ggsave("Figures/Parasites/obs_corr_infect.png", plot = corr.p,
+#        width = 6.5, height = 3.25, dpi = 300)
 ```
 
 
@@ -698,7 +527,9 @@ ggsave("Figures/Parasites/IV_parasiteloads.png", plot = IV_SPA_SCT_HR,
 ```
 
 
-Bites, territorial interactions, and cleaning as a function of infection
+## Analyze link between BSS infection and behavior:
+
+Bites
 
 ```{r}
 # Bites
@@ -708,8 +539,7 @@ bite.para.m1 <- glmmTMB(data = final.parasites,
 
 test.bite.para <- simulateResiduals(fittedModel = bite.para.m1, n = 250, plot = T)
 summary(bite.para.m1)
-options(contrasts = c("contr.sum", "contr.poly"))
-Anova(bite.para.m1, type = 3)
+
 # Interaction terms involving total load are not significant, so remove
 
 bite.para.m2 <- glmmTMB(data = final.parasites, 
@@ -717,15 +547,38 @@ bite.para.m2 <- glmmTMB(data = final.parasites,
                          offset(log(Follow.Time)), family = nbinom2())
 
 test.bite.para <- simulateResiduals(fittedModel = bite.para.m2, n = 250, plot = T)
+
 summary(bite.para.m2)
 options(contrasts = c("contr.sum", "contr.poly"))
 Anova(bite.para.m2, type = 3)
-fixef(bite.para.m2)
+
+# per unit increase in ln(severity+1), x% change in rate
+
+(exp(-0.09482) - 1)*100
+
+# McFadden's R2 and p-value
+
+null.bite.m2 <- update(bite.para.m2, . ~ 1)
+
+ll.full.bite <- logLik(bite.para.m2)
+ll.null.bite <- logLik(null.bite.m2)
+
+mcf.r2.bite <- as.numeric(1 - (ll.full.bite / ll.null.bite))
+mcf.r2.bite
+
+lr.bite <- as.numeric(2* (ll.full.bite - ll.null.bite))
+
+df.full.bite <- attr(ll.full.bite, "df")
+df.null.bite <- attr(ll.null.bite, "df")
+df.diff.bite <- df.full.bite - df.null.bite
+
+mcf.pval.bite <- pchisq(lr.bite, df = df.diff.bite, lower.tail = FALSE)
+mcf.pval.bite
 
 
-# Visualize effect of BSS counts
+# Visualize effect of BSS severity on bite rate
 
-# 1. Create data frame
+# Create data frame
 
 new.bites <- final.parasites %>%
   group_by(Species) %>%
@@ -737,7 +590,7 @@ new.bites <- final.parasites %>%
   mutate(Site = "AQ",
          Follow.Time = median(final.parasites$Follow.Time))
 
-# 2. Predict from the model
+# Predict from the model
 
 preds <- predict(
   bite.para.m2,
@@ -751,7 +604,8 @@ new.bites$upper <- exp(preds$fit + 1.96 * preds$se.fit)
 new.bites$eta <- preds$fit
 new.bites$se <- preds$se.fit
 
-# 3. Plot
+# Plot
+
 bites.p <- ggplot() +
   geom_point(data = final.parasites, aes(x = logTL, y = N_bites, color = Species), 
              size = 0.5, alpha = 0.5) +
@@ -759,7 +613,7 @@ bites.p <- ggplot() +
             linewidth = 1) +
   geom_ribbon(data = new.bites, aes(x = logTL, ymin = lower, ymax = upper, fill = Species), 
               alpha = 0.2, color = NA) +
-  labs(x = "ln(BSS Lessions + 1)", y = expression(paste("Bites 20-min"^-1))) +
+  labs(x = "ln(BSS Lesions + 1)", y = expression(paste("Bites 20-min"^-1))) +
   theme_classic() +
   scale_color_manual(values = c(sct.color, spa.color), 
                      label = c(expression(italic("Sc. taeniopterus")), 
@@ -775,16 +629,23 @@ bites.p
 
 # Visualize species differences
 
-# 1. Create data frame
+# Create data frame
 
-new.bites2 <- final.parasites %>%
-  group_by(Species) %>%
-  summarise(logTL = median(logTL, na.rm = TRUE),
-            .groups = "drop") %>%
-  mutate(Site = "AQ",
-         Follow.Time = median(final.parasites$Follow.Time))
+# new.bites2 <- final.parasites %>%
+#   group_by(Species) %>%
+#   summarise(logTL = median(logTL, na.rm = TRUE),
+#             .groups = "drop") %>%
+#   mutate(Site = "AQ",
+#          Follow.Time = median(final.parasites$Follow.Time))
 
-# 2. Predict from the model
+new.bites2 <- data.frame(
+  Species = c("Sctaeniopterus", "Spaurofrenatum"),
+  logTL = median(final.parasites$logTL, na.rm = T),
+  Site = "AQ",
+  Follow.Time = median(final.parasites$Follow.Time, na.rm = T)
+)
+
+# Predict from the model
 
 preds2 <- predict(
   bite.para.m2,
@@ -796,7 +657,8 @@ new.bites2$fit <- exp(preds2$fit)
 new.bites2$lower <- exp(preds2$fit - 1.96 * preds2$se.fit)
 new.bites2$upper <- exp(preds2$fit + 1.96 * preds2$se.fit)
 
-# 3. Plot
+# Plot
+
 bites.p2 <- ggplot() +
   geom_jitter(data = final.parasites, aes(x = Species, y = N_bites, color = Species), 
              width = 0.1, size = 0.5, alpha = 0.5) +
@@ -816,17 +678,11 @@ bites.p2
 
 # ggsave("Figures/Parasites/bites2.png", plot = bites.p2,
 #        width = 4, height = 3, dpi = 300)
+```
 
+Territorial aggression
 
-bites.m.p <- ggarrange(bites.p, bites.p2, ncol = 2, nrow = 1, labels = c("a", "b"), 
-                       font.label = list(size = 10, color = "black"))
-bites.m.p
-
-ggsave("Figures/Parasites/bites.results.png", plot = bites.m.p,
-       width = 6.5, height = 3, dpi = 300)
-
-
-
+```{r}
 # Parrotfish interactions
 
 ic.para.m1 <- glmmTMB(data = final.parasites, 
@@ -834,10 +690,7 @@ ic.para.m1 <- glmmTMB(data = final.parasites,
                         offset(log(Follow.Time)), family = nbinom2())
 
 test.ic.para <- simulateResiduals(fittedModel = ic.para.m1, n = 250, plot = T)
-testZeroInflation(test.ic.para)
 summary(ic.para.m1)
-options(contrasts = c("contr.sum", "contr.poly"))
-Anova(ic.para.m1, type = 3)
 
 # No significant interaction with total load for either of the categorical main effects, so remove
 
@@ -846,13 +699,36 @@ ic.para.m2 <- glmmTMB(data = final.parasites,
                         offset(log(Follow.Time)), family = nbinom2())
 
 test.ic.para2 <- simulateResiduals(fittedModel = ic.para.m2, n = 250, plot = T)
-testZeroInflation(test.ic.para2)
+
 summary(ic.para.m2)
 options(contrasts = c("contr.sum", "contr.poly"))
 Anova(ic.para.m2, type = 3)
-fixef(ic.para.m2)
+
+# per unit increase in ln(severity+1), x% change in rate
+(exp(0.2205) - 1)*100
+
+# McFadden's R2 and p-value
+null.ic.m2 <- update(ic.para.m2, . ~ 1)
+
+ll.full.ic <- logLik(ic.para.m2)
+ll.null.ic <- logLik(null.ic.m2)
+
+mcf.r2.ic <- as.numeric(1 - (ll.full.ic / ll.null.ic))
+mcf.r2.ic
+
+lr.ic <- as.numeric(2* (ll.full.ic - ll.null.ic))
+
+df.full.ic <- attr(ll.full.ic, "df")
+df.null.ic <- attr(ll.null.ic, "df")
+df.diff.ic <- df.full.ic - df.null.ic
+
+mcf.pval.ic <- pchisq(lr.ic, df = df.diff.ic, lower.tail = FALSE)
+mcf.pval.ic
+
 
 # Visualize total BSS counts on agonisms
+
+# Create data frame
 
 new.ints <- final.parasites %>%
   group_by(Species) %>%
@@ -866,6 +742,8 @@ new.ints <- final.parasites %>%
   mutate(Site = "AQ",
          Follow.Time = median(final.parasites$Follow.Time))
 
+# Predict from model
+
 preds.int <- predict(
   ic.para.m2,
   newdata = new.ints,
@@ -876,6 +754,8 @@ preds.int <- predict(
 new.ints$fit <- exp(preds.int$fit)
 new.ints$lower <- exp(preds.int$fit - 1.96 * preds.int$se.fit)
 new.ints$upper <- exp(preds.int$fit + 1.96 * preds.int$se.fit)
+
+# Plot
 
 ints.p <- ggplot() +
   geom_point(data = final.parasites, aes(x = logTL, y = N_Cint, color = Species), 
@@ -895,23 +775,28 @@ ints.p <- ggplot() +
   theme(legend.text = element_text(hjust = 0)) # Left-justify legend labels
 ints.p
 
-ggsave("Figures/Parasites/int_counts.png", plot = ints.p,
-       width = 6.5, height = 3, dpi = 300)
+# ggsave("Figures/Parasites/int_counts.png", plot = ints.p,
+#        width = 6.5, height = 3, dpi = 300)
+
 
 # Visualize site by species effect on agonisms
 
-# new.ints2 <- expand.grid(
-#   logTL = median(final.parasites$logTL), # set site as constant
-#   Species = unique(final.parasites$Species),
-#   Site = unique(final.parasites$Site),
-#   Follow.Time = median(final.parasites$Follow.Time)) # constant offset
+# Create data frame
+
+# new.ints2 <- final.parasites %>%
+#   group_by(Species) %>%
+#   summarise(logTL = median(logTL, na.rm = TRUE),
+#             .groups = "drop") %>%
+#   crossing(Site = unique(final.parasites$Site)) %>%
+#   mutate(Follow.Time = median(final.parasites$Follow.Time))
 
 new.ints2 <- final.parasites %>%
-  group_by(Species) %>%
-  summarise(logTL = median(logTL, na.rm = TRUE),
-            .groups = "drop") %>%
+  distinct(Species) %>%
   crossing(Site = unique(final.parasites$Site)) %>%
-  mutate(Follow.Time = median(final.parasites$Follow.Time))
+  mutate(logTL = median(final.parasites$logTL, na.rm = T),
+         Follow.Time = median(final.parasites$Follow.Time, na.rm = T))
+
+# Predict from model
 
 preds.int2 <- predict(
   ic.para.m2,
@@ -923,6 +808,8 @@ preds.int2 <- predict(
 new.ints2$fit <- exp(preds.int2$fit)
 new.ints2$lower <- exp(preds.int2$fit - 1.96 * preds.int2$se.fit)
 new.ints2$upper <- exp(preds.int2$fit + 1.96 * preds.int2$se.fit)
+
+# Plot
 
 ints.p2 <- ggplot() +
   geom_point(data = final.parasites, aes(x = Site, y = N_Cint, color = Species), 
@@ -944,37 +831,56 @@ ints.p2 <- ggplot() +
   theme(legend.text = element_text(hjust = 0)) # Left-justify legend labels
 ints.p2
 
-ggsave("Figures/Parasites/int_counts2.png", plot = ints.p2,
-       width = 4, height = 3, dpi = 300)
+# ggsave("Figures/Parasites/int_counts2.png", plot = ints.p2,
+#        width = 4, height = 3, dpi = 300)
+```
 
+Foraging area
 
-ints.m.p <- ggarrange(ints.p, ints.p2, ncol = 2, nrow = 1, labels = c("a", "b"), 
-                       font.label = list(size = 10, color = "black"))
-ints.m.p
-
-ggsave("Figures/Parasites/ints.results.png", plot = ints.m.p,
-       width = 6.5, height = 3, dpi = 300)
-
-
-
-#Home range area
+```{r}
+# Size of foraging areas
 
 hr.para.m1 <- glmmTMB(data = final.parasites, area ~ Site*Species + Site*logTL + Species*logTL + 
-                        offset(log(Follow.Time)), family = "gaussian")
+                        Species*scale(Follow.Time), family = "gaussian")
 test.hr.para <- simulateResiduals(fittedModel = hr.para.m1, n = 250, plot = T)
 summary(hr.para.m1)
-options(contrasts = c("contr.sum", "contr.poly"))
-Anova(hr.para.m1, type = 3)
-fixef(hr.para.m1)
+model.matrix(hr.para.m1) # determine indexing
+
+# Conditional slopes for species
+-2.2237 + 13.7027 # Sc. taeniopterus
+-2.2237 - 13.7027 # Sp. aurofrenatum
+
+# Compute adj-R2 
+
+# Extract the actual response variable values from the model
+
+y <- final.parasites$area
+
+# Extract residuals from model and get number of observations and coefficients
+
+resids <- residuals(hr.para.m1) # Pull residuals from model
+n <- length(resids) # Number of observations
+p <- length(fixef(hr.para.m1)$cond) # Number of coefficients (including intercept)
+
+# Calculate adj-R2
+
+rss <- sum(resids^2) # Residual SS
+tss <- sum((y - mean(y))^2) # Total SS
+r2 <- 1 - (rss / tss) # R2
+
+adj.r2 <- 1 - ((1 - r2) * (n - 1) / (n - p)) # adjusted R2
+print(adj.r2)
+
+# # Compare with lm version adj-R2
+# 
+# hr.para.m2 <- lm(data = final.parasites, area ~ Site*Species + Site*logTL + Species*logTL + 
+#                         Species*scale(Follow.Time))
+# summary(hr.para.m2) # good!
 
 
 # Visualize species by load effect on foraging area
 
-# new.hr <- expand.grid(
-#   logTL = seq(min(final.parasites$logTL), max(final.parasites$logTL), length.out = 100),
-#   Species = unique(final.parasites$Species),
-#   Site = "AQ", #set site as constant
-#   Follow.Time = median(final.parasites$Follow.Time)) #constant offset
+# Create data frame
 
 new.hr <- final.parasites %>%
   group_by(Species) %>%
@@ -985,6 +891,8 @@ new.hr <- final.parasites %>%
   unnest(logTL) %>%
   mutate(Site = "AQ",
          Follow.Time = median(final.parasites$Follow.Time))
+
+# Predict from model
 
 preds.hr <- predict(
   hr.para.m1,
@@ -997,6 +905,8 @@ new.hr$fit <- preds.hr$fit
 new.hr$lower <- preds.hr$fit - 1.96 * preds.hr$se.fit
 new.hr$upper <- preds.hr$fit + 1.96 * preds.hr$se.fit
 new.hr$se <- preds.hr$se.fit
+
+# Plot
 
 hr.p <- ggplot() +
   geom_point(data = final.parasites, aes(x = logTL, y = area, color = Species), 
@@ -1016,24 +926,28 @@ hr.p <- ggplot() +
   theme(legend.text = element_text(hjust = 0)) # Left-justify legend labels
 hr.p
 
-ggsave("Figures/Parasites/homerange.png", plot = hr.p,
-       width = 6.5, height = 3, dpi = 300)
+# ggsave("Figures/Parasites/homerange.png", plot = hr.p,
+#        width = 6.5, height = 3, dpi = 300)
 
 
 # Visualize site by species differences in foraging area
 
-# new.hr2 <- expand.grid(
-#   logTL = median(final.parasites$logTL), # set site as constant
-#   Species = unique(final.parasites$Species),
-#   Site = unique(final.parasites$Site),
-#   Follow.Time = median(final.parasites$Follow.Time)) # constant offset
+# Create data frame
+
+# new.hr2 <- final.parasites %>%
+#   group_by(Species) %>%
+#   summarise(logTL = median(logTL, na.rm = TRUE),
+#             .groups = "drop") %>%
+#   crossing(Site = unique(final.parasites$Site)) %>%
+#   mutate(Follow.Time = median(final.parasites$Follow.Time))
 
 new.hr2 <- final.parasites %>%
-  group_by(Species) %>%
-  summarise(logTL = median(logTL, na.rm = TRUE),
-            .groups = "drop") %>%
+  distinct(Species) %>%
   crossing(Site = unique(final.parasites$Site)) %>%
-  mutate(Follow.Time = median(final.parasites$Follow.Time))
+  mutate(logTL = median(final.parasites$logTL, na.rm = T),
+         Follow.Time = median(final.parasites$Follow.Time, na.rm = T))
+
+# Predict from model
 
 preds.hr2 <- predict(
   hr.para.m1,
@@ -1045,6 +959,8 @@ preds.hr2 <- predict(
 new.hr2$fit <- preds.hr2$fit
 new.hr2$lower <- preds.hr2$fit - 1.96 * preds.hr2$se.fit
 new.hr2$upper <- preds.hr2$fit + 1.96 * preds.hr2$se.fit
+
+# Plot
 
 hr.p2 <- ggplot() +
   geom_point(data = final.parasites, aes(x = Site, y = area, color = Species), 
@@ -1066,170 +982,201 @@ hr.p2 <- ggplot() +
   theme(legend.text = element_text(hjust = 0)) # Left-justify legend labels
 hr.p2
 
-ggsave("Figures/Parasites/homerange2.png", plot = hr.p2,
-       width = 4, height = 3, dpi = 300)
+# ggsave("Figures/Parasites/homerange2.png", plot = hr.p2,
+#        width = 4, height = 3, dpi = 300)
+```
 
 
-hr.m.p <- ggarrange(hr.p, hr.p2, ncol = 2, nrow = 1, labels = c("a", "b"), 
-                       font.label = list(size = 10, color = "black"))
-hr.m.p
+Figures for publication
 
-ggsave("Figures/Parasites/hr.results.png", plot = hr.m.p,
-       width = 6.5, height = 3, dpi = 300)
+```{r}
+main.p <- ggarrange(bites.p, ints.p, hr.p, ncol = 1, nrow = 3, labels = c("a", "b", "c"),
+                       font.label = list(size = 10, color = "black"), align = "v")
+main.p
+
+ggsave("Figures/Parasites/severity_results.png", plot = main.p,
+       width = 5, height = 7, dpi = 300)
+
+supp.p <- ggarrange(bites.p2, ints.p2, hr.p2, ncol = 1, nrow = 3, labels = c("a", "b", "c"),
+                       font.label = list(size = 10, color = "black"), align = "v")
+supp.p
+
+ggsave("Figures/Parasites/supp_results.png", plot = supp.p,
+       width = 5, height = 7, dpi = 300)
 ```
 
 
 
+## Assess population-level changes in bite rates for our observed populations and a population with no infection.
+
+```{r}
+lesions <- final.parasites %>% 
+  st_drop_geometry() %>%
+  filter(Species == "Sctaeniopterus") %>%
+  pull(as.numeric(Total_load)) %>%
+  unname()
+
+# Estimated slope from negative binomial GLM
+beta <- -0.09482
+
+# Predicted bite rate of uninfected fish per 20 min
+bite_uninfected <- new.bites %>% st_drop_geometry() %>%
+  filter(Species == "Sctaeniopterus" & logTL == 0) %>% 
+  mutate(fit = as.numeric(round(fit, 0))) %>%
+  pull(fit) %>%
+  unname()
+
+# Individual predictions
+population <- tibble(
+ fish_id = seq_along(lesions),
+ lesions = lesions) %>%
+ mutate(relative_bite_rate = (lesions + 1)^beta,
+        predicted_bites = bite_uninfected * relative_bite_rate,
+        percent_reduction = 100 * (1 - relative_bite_rate))
+
+# Population summary
+population_summary <- population %>% 
+  summarise(n_fish = n(),
+            prevalence = mean(lesions > 0),
+            mean_lesions = mean(lesions),
+            sd_lesions = sd(lesions),
+            mean_predicted_bites = mean(predicted_bites),
+            sd_predicted_bites = sd(predicted_bites),
+            relative_grazing = mean(relative_bite_rate),
+            percent_reduction = 100 * (1 - relative_grazing))
+
+print(population_summary)
+```
 
 
 ## Investigating relationship between BSS infection and per area grazing CaCO3 removed
 
+# Continuous version
 ```{r eval = F}
-set.seed(123)
-
-bites.grps <- final.parasites %>%
-  group_by(Species) %>%
-  summarise(
-    logTL = list(c(
-      min(logTL, na.rm = TRUE),
-      median(logTL, na.rm = TRUE),
-      max(logTL, na.rm = TRUE)
-    )),
-    .groups = "drop"
-  ) %>%
-  unnest(logTL) %>%
-  mutate(
-    Site = "AQ",
-    Follow.Time = median(final.parasites$Follow.Time, na.rm = TRUE)
-  ) 
-
-preds.sim <- predict(
-  bite.para.m2,
-  newdata = bites.grps,
-  type = "link",
-  se.fit = TRUE
-)
-
-bites.grps$eta <- preds.sim$fit
-bites.grps$se <- preds.sim$se.fit
-
-bites.grps.sc <- bites.grps %>% filter(Species == "Sctaeniopterus")
-bites.grps.sp <- bites.grps %>% filter(Species == "Spaurofrenatum")
-
-
 library(purrr)
 
-nsim <- 250
+set.seed(123)
+nsim <- 1000
 
-sim.sc.bites <- bites.grps.sc %>%
-  mutate(sim_eta = map2(eta, se, ~ rnorm(nsim, .x, .y))) %>%
-  unnest(sim_eta) %>%
-  mutate(bites_20min = exp(sim_eta)) %>%
-  select(Species, logTL, bites_20min)
+bites.grps <- final.parasites %>%
+  st_drop_geometry() %>%
+  group_by(Species) %>%
+  summarise(Total_load = list(seq(min(Total_load, na.rm = T),
+                                  max(Total_load, na.rm = T),
+                                  by = 1L)),
+            .groups = "drop") %>%
+  unnest(Total_load) %>%
+  mutate(Site = "AQ",
+         Follow.Time = median(final.parasites$Follow.Time, na.rm = T),
+         logTL = log(Total_load + 1))
 
-sim.sp.bites <- bites.grps.sp %>%
-  mutate(sim_eta = map2(eta, se, ~ rnorm(nsim, .x, .y))) %>%
-  unnest(sim_eta) %>%
-  mutate(bites_20min = exp(sim_eta)) %>%
-  select(Species, logTL, bites_20min)
+preds.sim <- predict(bite.para.m2, newdata = bites.grps,
+                     type = "link", se.fit = T)
 
-sim.bites <- rbind(sim.sc.bites, sim.sp.bites) %>%
-  rownames_to_column()
+bites.grps$eta <- preds.sim$fit
+bites.grps$se  <- preds.sim$se.fit
 
 
-erosion.df <- lengths %>%
+# Monte Carlo simulations to simulate area and volume removed per bite 1000 times for each BSS severity
+
+sim.results <- map(seq_len(nsim), function(i) {
+
+  # Re-draw area and volume removed slopes each iteration
+  # Bruggemann et al. 1996 using Sc. vetula equations for both
+  area.slope <- rnorm(1, 4.013, 0.241)
+  vol.slope  <- rnorm(1, 0.193, 0.020)
+
+  bites.grps %>%
+    mutate(iter = i,
+           sim_eta = rnorm(n(), eta, se),   # bite rate noise per row
+           bites_20min = exp(sim_eta),
+           vol_slope = vol.slope,
+           area_slope = area.slope)
+}) %>%
+  list_rbind()
+
+
+# Join area grazed and erosion data with everything else and compute metrics
+
+erosion.params <- lengths %>%
   select(Species, mFL) %>%
-         # Adam et al. 2018
-  mutate(prop_bite_scars = ifelse(Species == "Sctaeniopterus", 0.22, 0.06),
-         # Average from ReefBudget methodology June 2024 (could use the mean and sd from the July 2024)
-         substrate_dens = 1.72,
-         # Bellwood et al. 1995
-         prop_day_feed = ifelse(Species == "Sctaeniopterus", 0.877, 0.833),
-         # Bruggemann et al. 1996 using Sc. vetula equations for both
-         vol_slope_draw = rnorm(1, 0.193, 0.020),
-         area_slope_draw = rnorm(1, 4.013, 0.241),
-         cm3_per_bite = vol_slope_draw*(10^-6)*(mFL^3),
-         cm2_per_bite = area_slope_draw*(10^-4)*(mFL^2))
+  # Adam et al. 2018
+  mutate(prop_bite_scars = ifelse(Species == "Sctaeniopterus", 0.27,  0.06),
+  # Caribbean average from ReefBudget methodology June 2024
+         substrate_dens  = 1.72,
+  # Bellwood et al. 1995
+         prop_day_feed   = ifelse(Species == "Sctaeniopterus", 0.877, 0.833))
 
-sim.bites.eq <- sim.bites %>%
-  left_join(erosion.df) %>%
-  mutate(bites_min = bites_20min/20,
-         bites_wscar_min = bites_min*prop_bite_scars,
-         cm2_day = bites_wscar_min*cm2_per_bite*60*12*prop_day_feed,
-         cm3_day = bites_wscar_min*cm3_per_bite*60*12*prop_day_feed,
-         kg_day = (cm3_day*substrate_dens)/1000,
-         m2_year = (cm2_day*365)/10000,
-         kg_year = kg_day*365,
-         severity = ifelse(logTL < 1, "Low", "High"))
+sim.erosion <- sim.results %>%
+  left_join(erosion.params, by = "Species") %>%
+  mutate(cm3_per_bite = vol_slope  * (10^-6) * (mFL^3),
+         cm2_per_bite = area_slope * (10^-4) * (mFL^2),
+         bites_min = bites_20min / 20,
+         bites_wscar_min = bites_min * prop_bite_scars,
+         cm2_day  = bites_wscar_min * cm2_per_bite * 60 * 12 * prop_day_feed,
+         cm3_day  = bites_wscar_min * cm3_per_bite * 60 * 12 * prop_day_feed,
+         kg_day   = (cm3_day * substrate_dens) / 1000,
+         m2_year  = (cm2_day * 365) / 10000,
+         kg_year  = kg_day * 365,
+         Total_load = round(exp(logTL)-1))
 
-sim.bites.eq.sum <- sim.bites.eq %>%
-  group_by(Species, logTL) %>%
-  summarise(N = n(),
-            mArea = mean(m2_year),
-            seArea = sd(m2_year)/sqrt(N),
-            mMass = mean(kg_year),
-            seMass = sd(kg_year)/sqrt(N))
 
-# Surface area grazed per year
+sct.erosion <- sim.erosion %>% filter(Species == "Sctaeniopterus")
 
-ggplot(data = sim.bites.eq %>% filter(Species == "Sctaeniopterus"), 
-       aes(x = logTL, y = m2_year, color = Species)) +
-  stat_summary(fun = mean, geom = "point", size = 2, 
-    position = position_dodge(width = 0.3)) +
-  stat_summary(fun.data = mean_cl_normal,  # mean ± 1.96*SE (approx CI)
-    geom = "errorbar", width = 0, linewidth = 0.5,
-    position = position_dodge(width = 0.3), color = "black") +
-  labs(x = "BSS Severity", y = expression("Area Cleared (m"^2~" yr"^-1~")")) +
+area.m1 <- glmmTMB(log(m2_year) ~ logTL, family = gaussian(),
+                   data = sct.erosion)
+test.area <- simulateResiduals(fittedModel = area.m1, n = 250, plot = T)
+summary(area.m1)
+
+
+erosion.m1 <- glmmTMB(log(kg_year) ~ logTL, family = gaussian(),
+                   data = sct.erosion)
+test.erosion <- simulateResiduals(fittedModel = erosion.m1, n = 250, plot = T)
+summary(erosion.m1)
+
+
+# Summarise
+
+erosion.summary <- sim.erosion %>%
+  group_by(Species, logTL, Total_load, severity) %>%
+  summarise(across(c(bites_20min, kg_year, m2_year),
+                   list(mean = mean,
+                        lo95   = ~ quantile(.x, 0.025),
+                        hi95   = ~ quantile(.x, 0.975)),
+                   .names = "{.col}_{.fn}"),
+            .groups = "drop")
+
+# Plot
+
+area.grazed.p <- ggplot(data = erosion.summary %>% filter(Species == "Sctaeniopterus"), 
+       aes(x = severity, y = m2_year_mean)) +
+  geom_point(stat = "identity", color = sct.color, size = 2) +
+  geom_errorbar(aes(x = severity, ymin = m2_year_lo95, ymax = m2_year_hi95), 
+                color = sct.color, width = 0, linewidth = 0.5) +
+  labs(x = "BSS Severity", y = expression("Area Cleared (m"^2~"ind"^-1~"y"^-1~")")) +
   theme_classic() +
-  # facet_wrap(~Species, scales = "free", 
-  #            labeller = labeller(Species = c(Sctaeniopterus = "Sc. taeniopterus",
-  #                                            Spaurofrenatum = "Sp. aurofrenatum"))) +
-  scale_color_manual(values = c(sct.color, spa.color)) +
-  guides(color = "none") +
   theme(strip.background = element_blank())
+area.grazed.p
 
-
-ggplot(data = sim.bites.eq %>% filter(Species == "Sctaeniopterus"), 
-       aes(x = logTL, y = kg_year, color = Species)) +
-  stat_summary(fun = mean, geom = "point", size = 2, 
-    position = position_dodge(width = 0.3)) +
-  stat_summary(fun.data = mean_cl_normal,  # mean ± 1.96*SE (approx CI)
-    geom = "errorbar", width = 0, linewidth = 0.5,
-    position = position_dodge(width = 0.3), color = "black") +
-  labs(x = "BSS Severity", y = expression("Erosion Rate (kg CaCO"[3]~"yr"^-1~")")) +
+mass.removed.p <- ggplot(data = erosion.summary %>% filter(Species == "Sctaeniopterus"), 
+       aes(x = severity, y = kg_year_mean)) +
+  geom_point(stat = "identity", color = sct.color, size = 2) +
+  geom_errorbar(aes(x = severity, ymin = kg_year_lo95, ymax = kg_year_hi95), 
+                color = sct.color, width = 0, linewidth = 0.5) +
+  labs(x = "BSS Severity", y = expression("Bioerosion (kg CaCO"[3]~"ind"^-1~"y"^-1~")")) +
   theme_classic() +
-  # facet_wrap(~Species, scales = "free", 
-  #            labeller = labeller(Species = c(Sctaeniopterus = "Sc. taeniopterus",
-  #                                            Spaurofrenatum = "Sp. aurofrenatum"))) +
-  scale_color_manual(values = c(sct.color, spa.color)) +
-  guides(color = "none") +
   theme(strip.background = element_blank())
+mass.removed.p
 
-# sim.sc.hr <- hr.grps.sc %>%
-#   mutate(area = map2(fit, se, ~ rnorm(nsim, mean = .x, sd = .y))) %>%
-#   unnest(area) %>%
-#   select(Species, logTL, area) 
-# 
-# sim.sp.hr <- hr.grps.sp %>%
-#   mutate(area = map2(fit, se, ~ rnorm(nsim, mean = .x, sd = .y))) %>%
-#   unnest(area) %>%
-#   select(Species, logTL, area) 
-# 
-# sim.hr <- rbind(sim.sc.hr, sim.sp.hr) %>%
-#   rownames_to_column()
-# 
-# 
-# sim <- sim.bites %>%
-#   left_join(sim.hr) %>%
-#   mutate(bites_hr = bites_20min*3,
-#          forage_hr = ifelse(Species == "Sctaeniopterus", 12*0.877, 12*0.833),
-#          bites_day = bites_hr * forage_hr,
-#          bites_day_m2 = bites_day/area,
-#          severity = ifelse(logTL < 1, "Low", "High"))
+erosion.p <- ggarrange(area.grazed.p, mass.removed.p, ncol = 2, nrow = 1, labels = c("a", "b"), 
+                       font.label = list(size = 10, color = "black"))
+erosion.p
 
+ggsave("Figures/Parasites/erosion.png", plot = erosion.p,
+       width = 6.5, height = 3, dpi = 300)
 ```
 
-
+# Original categorical version of the above...
 ```{r}
 library(purrr)
 
@@ -1237,6 +1184,7 @@ set.seed(123)
 nsim <- 1000
 
 bites.grps <- final.parasites %>%
+  st_drop_geometry() %>%
   group_by(Species) %>%
   summarise(logTL = list(c(min(logTL, na.rm = TRUE),
                            median(logTL, na.rm = TRUE),
@@ -1276,7 +1224,7 @@ sim.results <- map(seq_len(nsim), function(i) {
 
 erosion.params <- lengths %>%
   select(Species, mFL) %>%
-  mutate(prop_bite_scars = ifelse(Species == "Sctaeniopterus", 0.22,  0.06),
+  mutate(prop_bite_scars = ifelse(Species == "Sctaeniopterus", 0.27,  0.06),
          substrate_dens  = 1.72,
          prop_day_feed   = ifelse(Species == "Sctaeniopterus", 0.877, 0.833))
 
@@ -1296,27 +1244,15 @@ sim.erosion <- sim.results %>%
   mutate(severity = factor(severity, levels = c("Min", "Median", "Max")))
 
 
-# area.m1 <- glmmTMB(m2_year ~ severity, family = gaussian(link = "log"), 
-#                    data = sim.erosion %>% filter(Species == "Sctaeniopterus"))
-# test.area <- simulateResiduals(fittedModel = area.m1, n = 250, plot = T)
-# summary(area.m1)
-# 
-# 
-# erosion.m1 <- glmmTMB(kg_year ~ severity, family = gaussian(link = "log"), 
-#                    data = sim.erosion %>% filter(Species == "Sctaeniopterus"))
-# test.erosion <- simulateResiduals(fittedModel = erosion.m1, n = 250, plot = T)
-# summary(erosion.m1)
-
-
 sct.erosion <- sim.erosion %>% filter(Species == "Sctaeniopterus")
 
 
-library(rstatix)
-kruskal.test(m2_year ~ severity, data = sct.erosion)
-dunn_test(m2_year ~ severity, data = sct.erosion)
-
-kruskal.test(kg_year ~ severity, data = sct.erosion)
-dunn_test(kg_year ~ severity, data = sct.erosion)
+# library(rstatix)
+# kruskal.test(m2_year ~ severity, data = sct.erosion)
+# dunn_test(m2_year ~ severity, data = sct.erosion)
+# 
+# kruskal.test(kg_year ~ severity, data = sct.erosion)
+# dunn_test(kg_year ~ severity, data = sct.erosion)
 
 
 # Summarise
@@ -1339,7 +1275,8 @@ area.grazed.p <- ggplot(data = erosion.summary %>% filter(Species == "Sctaeniopt
                 color = sct.color, width = 0, linewidth = 0.5) +
   labs(x = "BSS Severity", y = expression("Area Cleared (m"^2~"ind"^-1~"y"^-1~")")) +
   theme_classic() +
-  theme(strip.background = element_blank())
+  theme(strip.background = element_blank()) +
+  scale_x_discrete(labels = c("None", "Low", "High"))
 area.grazed.p
 
 mass.removed.p <- ggplot(data = erosion.summary %>% filter(Species == "Sctaeniopterus"), 
@@ -1349,7 +1286,8 @@ mass.removed.p <- ggplot(data = erosion.summary %>% filter(Species == "Sctaeniop
                 color = sct.color, width = 0, linewidth = 0.5) +
   labs(x = "BSS Severity", y = expression("Bioerosion (kg CaCO"[3]~"ind"^-1~"y"^-1~")")) +
   theme_classic() +
-  theme(strip.background = element_blank())
+  theme(strip.background = element_blank()) +
+  scale_x_discrete(labels = c("None", "Low", "High"))
 mass.removed.p
 
 erosion.p <- ggarrange(area.grazed.p, mass.removed.p, ncol = 2, nrow = 1, labels = c("a", "b"), 
