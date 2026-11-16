@@ -484,8 +484,8 @@ corr.p <- ggarrange(corr.tot.sc.p, corr.tot.sp.p,
                      font.label = list(size = 12, color = "black", face = "plain", family = "Arial"))
 corr.p
 
-# ggsave("Figures/Parasites/obs_corr_infect.png", plot = corr.p,
-#        width = 6.5, height = 3.25, dpi = 300)
+ggsave("Figures/Parasites/obs_corr_infect.png", plot = corr.p,
+       width = 6.5, height = 3.25, bg = "white", dpi = 300)
 ```
 
 
